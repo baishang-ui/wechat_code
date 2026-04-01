@@ -1,0 +1,260 @@
+<view class="page-shell theme-{{theme}} {{themeAnimating ? 'is-theme-transition' : ''}}">
+  <view class="bg-gradient">
+    <view class="gradient-blob blob-1"></view>
+    <view class="gradient-blob blob-2"></view>
+    <view class="gradient-blob blob-3"></view>
+    <view class="gradient-veil"></view>
+  </view>
+
+  <scroll-view wx:if="{{activeTab === 'monitor'}}" class="content-layer tab-page page-enter" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="content-inner">
+      <view class="hero panel glass-card floating-card section-enter">
+        <view class="hero-bar">
+          <view class="hero-copy">
+            <view class="section-kicker">MQTT</view>
+            <view class="section-title">连接状态</view>
+          </view>
+          <view class="hero-chip">Aliyun</view>
+        </view>
+
+        <view class="mqtt-status surface-card {{mqttConnected ? 'online' : 'offline'}}">
+          <view class="status-dot"></view>
+          <view class="status-copy">
+            <view class="status-label">{{mqttConnected ? '已连接' : '未连接'}}</view>
+            <view class="status-text">{{mqttStatusText}}</view>
+          </view>
+        </view>
+
+        <view class="action-row hero-actions">
+          <button class="secondary-button themed-secondary hero-button icon-button" bindtap="reconnectMqtt">
+            <image class="button-icon button-icon-sm" src="/assets/icons/refresh.svg" mode="aspectFit" />
+            <text>连接</text>
+          </button>
+        </view>
+      </view>
+
+      <view class="section-grid">
+        <view class="panel glass-card floating-card section-enter delay-1">
+          <view class="section-head">
+            <view class="section-kicker">Sensor</view>
+            <view class="section-title">传感器数值</view>
+            <view class="live-dot"></view>
+          </view>
+
+          <view class="sensor-grid">
+            <view class="sensor-card surface-card">
+              <view class="metric-orb temp-orb"></view>
+              <view class="metric-label">云端温度</view>
+              <view class="sensor-value {{temperatureAnimating ? 'is-animating' : ''}}">
+                <block wx:if="{{temperatureAnimating}}">
+                  <view class="sensor-value-layer outgoing">{{temperaturePrev}}<text class="metric-unit">C</text></view>
+                  <view class="sensor-value-layer incoming">{{temperatureNext}}<text class="metric-unit">C</text></view>
+                </block>
+                <block wx:else>
+                  <view class="sensor-value-layer static">{{temperature}}<text class="metric-unit">C</text></view>
+                </block>
+              </view>
+              <view class="sensor-cloud-text">收到消息后自动更新</view>
+            </view>
+            <view class="sensor-card surface-card">
+              <view class="metric-orb humi-orb"></view>
+              <view class="metric-label">云端湿度</view>
+              <view class="sensor-value {{humidityAnimating ? 'is-animating' : ''}}">
+                <block wx:if="{{humidityAnimating}}">
+                  <view class="sensor-value-layer outgoing">{{humidityPrev}}<text class="metric-unit">%</text></view>
+                  <view class="sensor-value-layer incoming">{{humidityNext}}<text class="metric-unit">%</text></view>
+                </block>
+                <block wx:else>
+                  <view class="sensor-value-layer static">{{humidity}}<text class="metric-unit">%</text></view>
+                </block>
+              </view>
+              <view class="sensor-cloud-text">收到消息后自动更新</view>
+            </view>
+          </view>
+
+          <view class="action-row sensor-actions">
+            <button class="secondary-button themed-secondary hero-button icon-button" bindtap="forceRefreshCloudData">
+              <image class="button-icon button-icon-sm" src="/assets/icons/refresh.svg" mode="aspectFit" />
+              <text>界面刷新</text>
+            </button>
+          </view>
+        </view>
+
+        <view class="panel glass-card floating-card section-enter delay-2">
+          <view class="section-head">
+            <view class="section-kicker">Logs</view>
+            <view class="section-title">运行日志</view>
+            <view class="hero-chip">{{logs.length}} 条</view>
+          </view>
+
+          <view wx:if="{{logs.length}}" class="log-list">
+            <view wx:for="{{logs}}" wx:key="id" class="log-item surface-card">
+              <view class="log-head">
+                <view class="log-title">{{item.title}}</view>
+                <view class="log-time">{{item.time}}</view>
+              </view>
+              <view class="log-content">{{item.content}}</view>
+            </view>
+          </view>
+
+          <view wx:else class="log-empty surface-card">
+            <view class="empty-text">暂无日志</view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <scroll-view wx:if="{{activeTab === 'todo'}}" class="content-layer tab-page page-enter" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="content-inner">
+      <view class="panel glass-card floating-card section-enter">
+        <view class="section-head">
+          <view class="section-kicker">Todo</view>
+          <view class="section-title">任务清单</view>
+          <view class="hero-chip">{{todos.length}} 项</view>
+        </view>
+
+        <view class="todo-editor surface-card">
+          <input
+            class="input glass-input"
+            value="{{todoInput}}"
+            bindinput="handleTodoInput"
+            placeholder="添加任务"
+            placeholder-class="input-placeholder"
+          />
+          <view class="action-row todo-toolbar">
+            <button class="primary-button themed-button half icon-button" bindtap="addTodo">
+              <image class="button-icon" src="/assets/icons/add.svg" mode="aspectFit" />
+              <text>新增任务</text>
+            </button>
+            <button class="secondary-button themed-secondary half icon-button" bindtap="submitTodosToAliyun">
+              <image class="button-icon button-icon-sm" src="/assets/icons/upload.svg" mode="aspectFit" />
+              <text>提交到阿里云</text>
+            </button>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{todos.length}}" class="todo-list">
+        <view
+          wx:for="{{todos}}"
+          wx:key="id"
+          wx:for-index="index"
+          class="todo-item {{item.isNew ? 'item-enter' : ''}} {{item.completed ? 'completed' : ''}} {{item.isRemoving ? 'is-removing' : ''}} {{item.isToggling ? 'is-toggling' : ''}} {{editingId === item.id ? 'editing' : ''}}"
+          style="{{item.isNew ? 'animation-delay:' + (index * 70) + 'ms;' : ''}}"
+        >
+          <view class="todo-item-shell glass-card">
+            <block wx:if="{{editingId === item.id}}">
+              <view class="todo-inline-editor">
+                <view class="todo-edit-head">
+                  <view class="todo-check editing">编辑中</view>
+                  <view class="todo-time">修改后会更新显示时间</view>
+                </view>
+                <input
+                  class="input glass-input inline-input"
+                  value="{{editingInput}}"
+                  bindinput="handleEditTodoInput"
+                  placeholder="修改任务内容"
+                  placeholder-class="input-placeholder"
+                  focus
+                />
+                <view class="todo-actions inline-actions">
+                  <button class="secondary-button themed-secondary action-pill icon-button" catchtap="cancelEdit">
+                    <image class="button-icon button-icon-xs" src="/assets/icons/close.svg" mode="aspectFit" />
+                    <text>取消</text>
+                  </button>
+                  <button class="primary-button themed-button action-pill solid-pill icon-button" catchtap="updateTodo">
+                    <image class="button-icon button-icon-xs" src="/assets/icons/save.svg" mode="aspectFit" />
+                    <text>保存</text>
+                  </button>
+                </view>
+              </view>
+            </block>
+            <block wx:else>
+              <view class="todo-main" data-id="{{item.id}}" bindtap="toggleTodo">
+                <view class="todo-check">{{item.completed ? '已完成' : '进行中'}}</view>
+                <view class="todo-content">
+                  <view class="todo-title">{{item.title}}</view>
+                  <view class="todo-time">{{item.displayTime}}</view>
+                </view>
+              </view>
+              <view class="todo-actions">
+                <button class="ghost-button action-pill icon-button" data-id="{{item.id}}" catchtap="startEditTodo">
+                  <image class="button-icon button-icon-xs" src="/assets/icons/edit.svg" mode="aspectFit" />
+                  <text>编辑</text>
+                </button>
+                <button class="ghost-button action-pill danger-pill icon-button" data-id="{{item.id}}" catchtap="deleteTodo">
+                  <image class="button-icon button-icon-xs" src="/assets/icons/delete.svg" mode="aspectFit" />
+                  <text>删除</text>
+                </button>
+              </view>
+            </block>
+          </view>
+        </view>
+      </view>
+
+      <view wx:elif="{{showEmptyState}}" class="empty-state glass-card empty-state-enter">
+        <view class="empty-title">暂无任务</view>
+        <view class="empty-text">添加后会显示在这里</view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="tabbar-wrap">
+    <view class="tabbar-ios glass-card">
+      <view class="tabbar-indicator-track">
+        <view class="tabbar-indicator {{tabbarPressing ? 'is-pressing' : ''}}" style="{{tabbarIndicatorStyle}}"></view>
+      </view>
+      <view
+        class="tabbar-pill {{activeTab === 'monitor' ? 'active' : ''}}"
+        data-tab="monitor"
+        bindtap="switchTab"
+        bindtouchstart="handleTabPressStart"
+        bindtouchend="handleTabPressEnd"
+        bindtouchcancel="handleTabPressEnd"
+      >
+        <view class="tabbar-icon monitor-icon">
+          <view class="monitor-line line-1"></view>
+          <view class="monitor-line line-2"></view>
+          <view class="monitor-line line-3"></view>
+        </view>
+        <view class="tabbar-label">监测</view>
+      </view>
+      <view
+        class="tabbar-pill {{activeTab === 'todo' ? 'active' : ''}}"
+        data-tab="todo"
+        bindtap="switchTab"
+        bindtouchstart="handleTabPressStart"
+        bindtouchend="handleTabPressEnd"
+        bindtouchcancel="handleTabPressEnd"
+      >
+        <view class="tabbar-icon todo-icon">
+          <view class="todo-check-icon">
+            <view class="todo-check-stem"></view>
+            <view class="todo-check-tail"></view>
+          </view>
+          <view class="todo-lines">
+            <view class="todo-line todo-line-1"></view>
+            <view class="todo-line todo-line-2"></view>
+          </view>
+        </view>
+        <view class="tabbar-label">待办</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="theme-fab-bottom">
+    <view class="theme-toggle-orb {{theme}}" bindtap="toggleTheme" hover-class="theme-toggle-orb-pressed" hover-stay-time="80">
+      <view class="theme-toggle-core">
+        <image class="theme-icon-image" src="{{theme === 'light' ? '/assets/icons/sun.svg' : '/assets/icons/moon.svg'}}" mode="aspectFit" />
+      </view>
+    </view>
+  </view>
+
+  <view class="toast-wrap {{toasts.length ? 'show' : ''}}">
+    <view wx:for="{{toasts}}" wx:key="id" class="custom-toast glass-card {{item.type}}" style="{{item.style}}">
+      <view class="custom-toast-dot"></view>
+      <view class="custom-toast-text">{{item.text}}</view>
+    </view>
+  </view>
+</view>

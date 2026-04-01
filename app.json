@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+
+  "window": {
+    "navigationBarTitleText": "智能桌面盒子",
+    "navigationBarBackgroundColor": "#eef5fb",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#eef5fb",
+    "backgroundTextStyle": "light"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

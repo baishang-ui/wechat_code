@@ -1,0 +1,79 @@
+page {
+  background: #eaf2ff;
+  color: #183253;
+  font-family: "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+view,
+text,
+button,
+input {
+  box-sizing: border-box;
+}
+
+button {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.page-shell {
+  min-height: 100vh;
+  padding: 28rpx 24rpx 40rpx;
+}
+
+.section-title {
+  font-size: 42rpx;
+  line-height: 1.16;
+  font-weight: 800;
+  letter-spacing: -0.6rpx;
+}
+
+.primary-button,
+.secondary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-weight: 700;
+  letter-spacing: 0.2rpx;
+}
+
+.primary-button {
+  min-height: 94rpx;
+  padding: 0 30rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+}
+
+.secondary-button {
+  min-height: 88rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+}
+
+.ghost-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56rpx;
+  padding: 0;
+  border: none;
+  line-height: 1.4;
+}
+
+.primary-button::after,
+.secondary-button::after,
+.ghost-button::after {
+  border: none;
+}
+
+.input {
+  width: 100%;
+  min-height: 96rpx;
+  padding: 0 28rpx;
+  border-radius: 24rpx;
+  font-size: 28rpx;
+  line-height: 96rpx;
+}
