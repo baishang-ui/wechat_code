@@ -80,13 +80,11 @@ function buildToastStyle(toast) {
   let translateY = -(toast.stackIndex || 0) * TOAST_STEP_RPX;
   let scale = 1;
   let opacity = 1;
-  let blur = 0;
 
   if (toast.entering) {
     translateY += 28;
     scale = 0.94;
     opacity = 0;
-    blur = 14;
   } else if (toast.shifting) {
     translateY += 16;
     scale = 0.992;
@@ -95,16 +93,14 @@ function buildToastStyle(toast) {
   if (toast.leaving && toast.leaveMode === 'overflow') {
     opacity = 0;
     scale = 0.96;
-    blur = 10;
     translateY += 16;
   } else if (toast.leaving) {
     translateY += 16;
     opacity = 0;
     scale = 0.96;
-    blur = 10;
   }
 
-  return `transform: translate3d(${translateX}, ${translateY}rpx, 0) scale(${scale}); opacity: ${opacity}; filter: blur(${blur}rpx);`;
+  return `transform: translate3d(${translateX}, ${translateY}rpx, 0) scale(${scale}); opacity: ${opacity};`;
 }
 
 function withToastStyles(toasts) {
@@ -115,19 +111,50 @@ function withToastStyles(toasts) {
   );
 }
 
-function decorateTodos(todos) {
+function buildTodoStyle(todo) {
+  let translateY = 0;
+  let scale = 1;
+  let opacity = 1;
+
+  if (todo.isEntering) {
+    translateY -= 16;
+    scale = 0.96;
+    opacity = 0;
+  }
+
+  if (todo.isRemoving) {
+    translateY += 16;
+    scale = 0.96;
+    opacity = 0;
+  }
+
+  return `transform: translate3d(0, ${translateY}rpx, 0) scale(${scale}); opacity: ${opacity};`;
+}
+
+function withTodoStyles(todos) {
   return (todos || []).map((item) =>
-    Object.assign(
-      {
-        isRemoving: false,
-        isToggling: false,
-        isNew: false,
-        displayTime: formatTodoTime(item.updatedAt || item.createdAt)
-      },
-      item,
-      {
-        displayTime: formatTodoTime(item.updatedAt || item.createdAt)
-      }
+    Object.assign({}, item, {
+      style: buildTodoStyle(item)
+    })
+  );
+}
+
+function decorateTodos(todos) {
+  return withTodoStyles(
+    (todos || []).map((item) =>
+      Object.assign(
+        {
+          isRemoving: false,
+          isToggling: false,
+          isNew: false,
+          isEntering: false,
+          displayTime: formatTodoTime(item.updatedAt || item.createdAt)
+        },
+        item,
+        {
+          displayTime: formatTodoTime(item.updatedAt || item.createdAt)
+        }
+      )
     )
   );
 }
@@ -212,6 +239,7 @@ Page({
     editingId: '',
     editingInput: '',
     todos: [],
+    pressingTodoId: '',
     incomingMessage: '',
     logs: []
   },
@@ -249,6 +277,9 @@ Page({
     if (this.toggleTodoTimer) {
       clearTimeout(this.toggleTodoTimer);
     }
+    if (this.addTodoMotionTimer) {
+      clearTimeout(this.addTodoMotionTimer);
+    }
     if (this.themeAnimationTimer) {
       clearTimeout(this.themeAnimationTimer);
     }
@@ -262,6 +293,7 @@ Page({
         clearTimeout(this.sensorAnimationTimers[key]);
       });
     }
+    this.todoPressAnchor = null;
     if (this.mqttClient) {
       this.mqttClient.disconnect();
     }
@@ -615,6 +647,67 @@ Page({
     );
   },
 
+  clearTodoPressState() {
+    this.todoPressAnchor = null;
+    if (!this.data.pressingTodoId) {
+      return;
+    }
+    this.setData({
+      pressingTodoId: ''
+    });
+  },
+
+  handleTodoPressStart(event) {
+    const { id } = event.currentTarget.dataset;
+    if (!id || this.data.editingId === id) {
+      return;
+    }
+
+    const touch = (event.touches && event.touches[0]) || (event.changedTouches && event.changedTouches[0]);
+    this.todoPressAnchor = touch
+      ? {
+          id,
+          x: Number(touch.pageX || touch.clientX || 0),
+          y: Number(touch.pageY || touch.clientY || 0)
+        }
+      : null;
+
+    if (this.data.pressingTodoId === id) {
+      return;
+    }
+
+    this.setData({
+      pressingTodoId: id
+    });
+  },
+
+  handleTodoPressMove(event) {
+    const { id } = event.currentTarget.dataset;
+    if (!id || this.data.pressingTodoId !== id) {
+      return;
+    }
+
+    const anchor = this.todoPressAnchor;
+    const touch = event.touches && event.touches[0];
+    if (!anchor || anchor.id !== id || !touch) {
+      return;
+    }
+
+    const moveX = Number(touch.pageX || touch.clientX || 0) - anchor.x;
+    const moveY = Number(touch.pageY || touch.clientY || 0) - anchor.y;
+    if (moveX * moveX + moveY * moveY > 196) {
+      this.clearTodoPressState();
+    }
+  },
+
+  handleTodoPressEnd() {
+    this.clearTodoPressState();
+  },
+
+  handleTodoPressCancel() {
+    this.clearTodoPressState();
+  },
+
   handleTodoInput(event) {
     this.setData({
       todoInput: event.detail.value
@@ -637,23 +730,27 @@ Page({
       return;
     }
 
+    const now = new Date().toISOString();
+    const createdId = createId();
     let todos = this.data.todos.slice();
     todos.unshift({
-      id: createId(),
+      id: createdId,
       title,
       completed: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
+      displayTime: formatTodoTime(now),
       isRemoving: false,
       isToggling: false,
-      isNew: true
+      isNew: true,
+      isEntering: true
     });
 
     todos = sortTodos(todos);
 
     saveTodos(sanitizeTodos(todos));
     this.setData({
-      todos,
+      todos: withTodoStyles(todos),
       todoInput: '',
       showEmptyState: false
     });
@@ -663,15 +760,29 @@ Page({
       icon: 'success'
     });
 
-    setTimeout(() => {
-      const targetIndex = findTodoIndexById(this.data.todos, todos[0] && todos[0].id);
-      if (targetIndex < 0) {
-        return;
+    const startEnterTransition = () => {
+      if (this.addTodoMotionTimer) {
+        clearTimeout(this.addTodoMotionTimer);
       }
-      this.setData({
-        [`todos[${targetIndex}].isNew`]: false
-      });
-    }, 360);
+      this.addTodoMotionTimer = setTimeout(() => {
+        const nextTodos = this.data.todos.map((item) =>
+          Object.assign({}, item, {
+            isNew: item.id === createdId ? false : item.isNew,
+            isEntering: item.id === createdId ? false : item.isEntering
+          })
+        );
+        this.setData({
+          todos: withTodoStyles(nextTodos)
+        });
+        this.addTodoMotionTimer = null;
+      }, 16);
+    };
+
+    if (typeof wx.nextTick === 'function') {
+      wx.nextTick(startEnterTransition);
+    } else {
+      startEnterTransition();
+    }
   },
 
   updateTodo() {
@@ -696,6 +807,7 @@ Page({
               isRemoving: false,
               isToggling: false,
               isNew: false,
+              isEntering: false,
               displayTime: formatTodoTime(updatedAt)
             })
           : item
@@ -704,7 +816,7 @@ Page({
 
     saveTodos(sanitizeTodos(todos));
     this.setData({
-      todos,
+      todos: withTodoStyles(todos),
       editingId: '',
       editingInput: '',
       showEmptyState: false
@@ -723,6 +835,7 @@ Page({
       return;
     }
 
+    this.clearTodoPressState();
     this.setData({
       editingId: id,
       editingInput: target.title,
@@ -732,6 +845,7 @@ Page({
   },
 
   cancelEdit() {
+    this.clearTodoPressState();
     this.setData({
       editingId: '',
       editingInput: ''
@@ -740,6 +854,7 @@ Page({
 
   toggleTodo(event) {
     const { id } = event.currentTarget.dataset;
+    this.clearTodoPressState();
     const todos = this.data.todos.map((item) =>
       item.id === id
         ? Object.assign({}, item, {
@@ -747,11 +862,12 @@ Page({
             updatedAt: new Date().toISOString(),
             isRemoving: false,
             isToggling: true,
-            isNew: false
+            isNew: false,
+            isEntering: false
           })
         : item
     );
-    this.setData({ todos });
+    this.setData({ todos: withTodoStyles(todos) });
 
     if (this.toggleTodoTimer) {
       clearTimeout(this.toggleTodoTimer);
@@ -771,15 +887,16 @@ Page({
 
       saveTodos(sanitizeTodos(nextTodos));
       this.setData({
-        todos: nextTodos,
+        todos: withTodoStyles(nextTodos),
         showEmptyState: !nextTodos.length
       });
       this.toggleTodoTimer = null;
-    }, 280);
+    }, 320);
   },
 
   deleteTodo(event) {
     const { id } = event.currentTarget.dataset;
+    this.clearTodoPressState();
     const targetIndex = findTodoIndexById(this.data.todos, id);
     const target = targetIndex >= 0 ? this.data.todos[targetIndex] : null;
     if (!target || target.isRemoving) {
@@ -790,8 +907,18 @@ Page({
       this.cancelEdit();
     }
 
+    const todos = this.data.todos.map((item, index) => {
+      if (item.id === id) {
+        return Object.assign({}, item, {
+          isRemoving: true,
+          isEntering: false
+        });
+      }
+      return item;
+    });
+
     this.setData({
-      [`todos[${targetIndex}].isRemoving`]: true
+      todos: withTodoStyles(todos)
     });
 
     this.removeTodoTimers = this.removeTodoTimers || {};
@@ -800,15 +927,16 @@ Page({
     }
 
     this.removeTodoTimers[id] = setTimeout(() => {
-      const nextTodos = this.data.todos.filter((item) => item.id !== id);
+      const nextTodos = this.data.todos
+        .filter((item) => item.id !== id);
       saveTodos(sanitizeTodos(nextTodos));
       this.setData({
-        todos: nextTodos,
+        todos: withTodoStyles(nextTodos),
         showEmptyState: false
       });
       this.scheduleEmptyState(!nextTodos.length, nextTodos.length ? 0 : 320);
       delete this.removeTodoTimers[id];
-    }, 180);
+    }, 280);
 
     this.showToast({
       title: '删除成功',
