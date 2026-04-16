@@ -6,15 +6,30 @@
     <view class="gradient-veil"></view>
   </view>
 
-  <scroll-view wx:if="{{activeTab === 'monitor'}}" class="content-layer tab-page page-enter" scroll-y enhanced show-scrollbar="{{false}}">
-    <view class="content-inner">
+  <view class="app-topbar glass-card" style="{{topbarStyle}}">
+    <view class="app-topbar-inner" style="{{topbarInnerStyle}}">
+      <view class="app-topbar-left" style="{{topbarLeftStyle}}">
+        <view class="app-topbar-title-slot" style="{{topbarTitleSlotStyle}}">
+          <text class="app-topbar-title">智能桌面盒子</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <scroll-view wx:if="{{activeTab === 'monitor'}}" class="content-layer tab-page page-enter" scroll-y show-scrollbar="{{false}}">
+    <view class="content-inner" style="{{contentInnerStyle}}">
       <view class="hero panel glass-card floating-card section-enter">
-        <view class="hero-bar">
-          <view class="hero-copy">
-            <view class="section-kicker">MQTT</view>
-            <view class="section-title">连接状态</view>
+        <view class="hero-bar panel-head">
+          <view class="panel-head-side panel-head-side-left">
+            <view class="section-kicker with-icon">
+              <image class="section-kicker-icon" src="/assets/icons/mqtt.svg" mode="aspectFit" />
+              <text>MQTT</text>
+            </view>
           </view>
-          <view class="hero-chip">Aliyun</view>
+          <view class="section-title panel-head-title">连接状态</view>
+          <view class="panel-head-side panel-head-side-right">
+            <view class="hero-chip">Aliyun</view>
+          </view>
         </view>
 
         <view class="mqtt-status surface-card {{mqttConnected ? 'online' : 'offline'}}">
@@ -35,40 +50,86 @@
 
       <view class="section-grid">
         <view class="panel glass-card floating-card section-enter delay-1">
-          <view class="section-head">
-            <view class="section-kicker">Sensor</view>
-            <view class="section-title">传感器数值</view>
-            <view class="live-dot"></view>
+          <view class="section-head panel-head">
+            <view class="panel-head-side panel-head-side-left">
+              <view class="section-kicker with-icon">
+                <image class="section-kicker-icon" src="/assets/icons/sensor.svg" mode="aspectFit" />
+                <text>Sensor</text>
+              </view>
+            </view>
+            <view class="section-title panel-head-title">传感器数值</view>
+            <view class="panel-head-side panel-head-side-right">
+              <view class="live-dot"></view>
+            </view>
           </view>
 
           <view class="sensor-grid">
-            <view class="sensor-card surface-card">
+            <view class="sensor-card surface-card sensor-card-temp">
               <view class="metric-orb temp-orb"></view>
-              <view class="metric-label">云端温度</view>
+              <view class="sensor-fixed-unit">°C</view>
+              <view class="metric-label-row">
+                <image class="metric-label-icon" src="/assets/icons/temperature.svg" mode="aspectFit" />
+                <view class="metric-label">云端温度</view>
+              </view>
+              <view class="sensor-measure-layer" aria-hidden="true">
+                <view id="temperatureMeasureCurrentTrack" class="sensor-number-track sensor-number-measure">
+                  <view wx:for="{{temperatureMeasureCurrentFrames}}" wx:key="id" class="{{item.slotClass}}">
+                    <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
+                  </view>
+                </view>
+                <view id="temperatureMeasureNextTrack" class="sensor-number-track sensor-number-measure">
+                  <view wx:for="{{temperatureMeasureNextFrames}}" wx:key="id" class="{{item.slotClass}}">
+                    <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
+                  </view>
+                </view>
+              </view>
               <view class="sensor-value {{temperatureAnimating ? 'is-animating' : ''}}">
-                <block wx:if="{{temperatureAnimating}}">
-                  <view class="sensor-value-layer outgoing">{{temperaturePrev}}<text class="metric-unit">C</text></view>
-                  <view class="sensor-value-layer incoming">{{temperatureNext}}<text class="metric-unit">C</text></view>
-                </block>
-                <block wx:else>
-                  <view class="sensor-value-layer static">{{temperature}}<text class="metric-unit">C</text></view>
-                </block>
+                <view class="sensor-number-track" style="{{temperatureNumberTrackStyle}}">
+                  <view wx:for="{{temperatureDigitFrames}}" wx:key="id" class="{{item.slotClass}}">
+                    <block wx:if="{{temperatureAnimating && item.animate}}">
+                      <text class="sensor-digit-char outgoing {{item.prevClass}}" style="{{item.charStyle}}">{{item.prevChar}}</text>
+                      <text class="sensor-digit-char incoming {{item.nextClass}}" style="{{item.charStyle}}">{{item.nextChar}}</text>
+                    </block>
+                    <block wx:else>
+                      <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
+                    </block>
+                  </view>
+                </view>
               </view>
-              <view class="sensor-cloud-text">收到消息后自动更新</view>
             </view>
-            <view class="sensor-card surface-card">
+
+            <view class="sensor-card surface-card sensor-card-humi">
               <view class="metric-orb humi-orb"></view>
-              <view class="metric-label">云端湿度</view>
-              <view class="sensor-value {{humidityAnimating ? 'is-animating' : ''}}">
-                <block wx:if="{{humidityAnimating}}">
-                  <view class="sensor-value-layer outgoing">{{humidityPrev}}<text class="metric-unit">%</text></view>
-                  <view class="sensor-value-layer incoming">{{humidityNext}}<text class="metric-unit">%</text></view>
-                </block>
-                <block wx:else>
-                  <view class="sensor-value-layer static">{{humidity}}<text class="metric-unit">%</text></view>
-                </block>
+              <view class="sensor-fixed-unit">%</view>
+              <view class="metric-label-row">
+                <image class="metric-label-icon" src="/assets/icons/humidity.svg" mode="aspectFit" />
+                <view class="metric-label">云端湿度</view>
               </view>
-              <view class="sensor-cloud-text">收到消息后自动更新</view>
+              <view class="sensor-measure-layer" aria-hidden="true">
+                <view id="humidityMeasureCurrentTrack" class="sensor-number-track sensor-number-measure">
+                  <view wx:for="{{humidityMeasureCurrentFrames}}" wx:key="id" class="{{item.slotClass}}">
+                    <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
+                  </view>
+                </view>
+                <view id="humidityMeasureNextTrack" class="sensor-number-track sensor-number-measure">
+                  <view wx:for="{{humidityMeasureNextFrames}}" wx:key="id" class="{{item.slotClass}}">
+                    <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
+                  </view>
+                </view>
+              </view>
+              <view class="sensor-value {{humidityAnimating ? 'is-animating' : ''}}">
+                <view class="sensor-number-track" style="{{humidityNumberTrackStyle}}">
+                  <view wx:for="{{humidityDigitFrames}}" wx:key="id" class="{{item.slotClass}}">
+                    <block wx:if="{{humidityAnimating && item.animate}}">
+                      <text class="sensor-digit-char outgoing {{item.prevClass}}" style="{{item.charStyle}}">{{item.prevChar}}</text>
+                      <text class="sensor-digit-char incoming {{item.nextClass}}" style="{{item.charStyle}}">{{item.nextChar}}</text>
+                    </block>
+                    <block wx:else>
+                      <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
+                    </block>
+                  </view>
+                </view>
+              </view>
             </view>
           </view>
 
@@ -81,10 +142,17 @@
         </view>
 
         <view class="panel glass-card floating-card section-enter delay-2">
-          <view class="section-head">
-            <view class="section-kicker">Logs</view>
-            <view class="section-title">运行日志</view>
-            <view class="hero-chip">{{logs.length}} 条</view>
+          <view class="section-head panel-head">
+            <view class="panel-head-side panel-head-side-left">
+              <view class="section-kicker with-icon">
+                <image class="section-kicker-icon" src="/assets/icons/logs.svg" mode="aspectFit" />
+                <text>Logs</text>
+              </view>
+            </view>
+            <view class="section-title panel-head-title">运行日志</view>
+            <view class="panel-head-side panel-head-side-right">
+              <view class="hero-chip">{{logs.length}} 条</view>
+            </view>
           </view>
 
           <view wx:if="{{logs.length}}" class="log-list">
@@ -105,16 +173,23 @@
     </view>
   </scroll-view>
 
-  <scroll-view wx:if="{{activeTab === 'todo'}}" class="content-layer tab-page page-enter" scroll-y enhanced show-scrollbar="{{false}}">
-    <view class="content-inner">
+  <scroll-view wx:if="{{activeTab === 'todo'}}" class="content-layer tab-page page-enter" scroll-y show-scrollbar="{{false}}">
+    <view class="content-inner" style="{{contentInnerStyle}}">
       <view class="panel glass-card floating-card section-enter">
-        <view class="section-head">
-          <view class="section-kicker">Todo</view>
-          <view class="section-title">任务清单</view>
-          <view class="hero-chip">{{todos.length}} 项</view>
+        <view class="section-head panel-head">
+          <view class="panel-head-side panel-head-side-left">
+            <view class="section-kicker with-icon">
+              <image class="section-kicker-icon" src="/assets/icons/todo-list.svg" mode="aspectFit" />
+              <text>Todo</text>
+            </view>
+          </view>
+          <view class="section-title panel-head-title">任务清单</view>
+          <view class="panel-head-side panel-head-side-right">
+            <view class="hero-chip">{{todos.length}} 项</view>
+          </view>
         </view>
 
-        <view class="todo-editor surface-card">
+        <view class="todo-editor-flat">
           <input
             class="input glass-input"
             value="{{todoInput}}"
@@ -128,8 +203,8 @@
               <text>新增任务</text>
             </button>
             <button class="secondary-button themed-secondary half icon-button" bindtap="submitTodosToAliyun">
-              <image class="button-icon button-icon-sm" src="/assets/icons/upload.svg" mode="aspectFit" />
-              <text>提交到阿里云</text>
+              <image class="button-icon button-icon-sm" src="/assets/icons/refresh.svg" mode="aspectFit" />
+              <text>同步后端</text>
             </button>
           </view>
         </view>
@@ -194,6 +269,7 @@
       </view>
 
       <view wx:elif="{{showEmptyState}}" class="empty-state glass-card empty-state-enter">
+        <image class="empty-state-icon" src="/assets/icons/todo-list.svg" mode="aspectFit" />
         <view class="empty-title">暂无任务</view>
         <view class="empty-text">添加后会显示在这里</view>
       </view>
