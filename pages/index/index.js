@@ -1,4 +1,7 @@
-﻿const { loadSensorState, saveSensorState } = require('../../utils/storage');
+﻿// index.js
+
+
+const { loadSensorState, saveSensorState } = require('../../utils/storage');
 const { resolveAliyunConfig } = require('../../utils/aliyunConfig');
 const { MiniProgramMqttClient } = require('../../utils/mqttClient');
 
