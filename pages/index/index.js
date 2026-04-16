@@ -177,13 +177,11 @@ function buildToastStyle(toast) {
   let translateY = -(toast.stackIndex || 0) * TOAST_STEP_RPX;
   let scale = 1;
   let opacity = 1;
-  let blur = 0;
 
   if (toast.entering) {
     translateY += 28;
     scale = 0.94;
     opacity = 0;
-    blur = 14;
   } else if (toast.shifting) {
     translateY += 16;
     scale = 0.992;
@@ -192,16 +190,14 @@ function buildToastStyle(toast) {
   if (toast.leaving && toast.leaveMode === 'overflow') {
     opacity = 0;
     scale = 0.96;
-    blur = 10;
     translateY += 16;
   } else if (toast.leaving) {
     translateY += 16;
     opacity = 0;
     scale = 0.96;
-    blur = 10;
   }
 
-  return `transform: translate3d(${translateX}, ${translateY}rpx, 0) scale(${scale}); opacity: ${opacity}; filter: blur(${blur}rpx);`;
+  return `transform: translate3d(${translateX}, ${translateY}rpx, 0) scale(${scale}); opacity: ${opacity};`;
 }
 
 function withToastStyles(toasts) {
@@ -212,15 +208,53 @@ function withToastStyles(toasts) {
   );
 }
 
+<<<<<<< HEAD
 function decorateTodos(todos) {
   return (todos || [])
     .filter((item) => !item.deleted)
     .map((item) =>
+=======
+function buildTodoStyle(todo) {
+  let translateY = 0;
+  let scale = 1;
+  let opacity = 1;
+
+  if (todo.isEntering) {
+    translateY -= 16;
+    scale = 0.96;
+    opacity = 0;
+  }
+
+  if (todo.isRemoving) {
+    translateY += 16;
+    scale = 0.96;
+    opacity = 0;
+  }
+
+  return `transform: translate3d(0, ${translateY}rpx, 0) scale(${scale}); opacity: ${opacity};`;
+}
+
+function withTodoStyles(todos) {
+  return (todos || []).map((item) =>
+    Object.assign({}, item, {
+      style: buildTodoStyle(item)
+    })
+  );
+}
+
+function decorateTodos(todos) {
+  return withTodoStyles(
+    (todos || []).map((item) =>
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
       Object.assign(
         {
           isRemoving: false,
           isToggling: false,
           isNew: false,
+<<<<<<< HEAD
+=======
+          isEntering: false,
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
           displayTime: formatTodoTime(item.updatedAt || item.createdAt)
         },
         item,
@@ -228,7 +262,12 @@ function decorateTodos(todos) {
           displayTime: formatTodoTime(item.updatedAt || item.createdAt)
         }
       )
+<<<<<<< HEAD
     );
+=======
+    )
+  );
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 function findTodoIndexById(todos, id) {
@@ -322,6 +361,7 @@ Page({
     editingId: '',
     editingInput: '',
     todos: [],
+    pressingTodoId: '',
     incomingMessage: '',
     logs: []
   },
@@ -374,6 +414,9 @@ Page({
     if (this.toggleTodoTimer) {
       clearTimeout(this.toggleTodoTimer);
     }
+    if (this.addTodoMotionTimer) {
+      clearTimeout(this.addTodoMotionTimer);
+    }
     if (this.themeAnimationTimer) {
       clearTimeout(this.themeAnimationTimer);
     }
@@ -387,6 +430,7 @@ Page({
         clearTimeout(this.sensorAnimationTimers[key]);
       });
     }
+    this.todoPressAnchor = null;
     if (this.mqttClient) {
       this.mqttClient.disconnect();
     }
@@ -988,6 +1032,67 @@ Page({
     );
   },
 
+  clearTodoPressState() {
+    this.todoPressAnchor = null;
+    if (!this.data.pressingTodoId) {
+      return;
+    }
+    this.setData({
+      pressingTodoId: ''
+    });
+  },
+
+  handleTodoPressStart(event) {
+    const { id } = event.currentTarget.dataset;
+    if (!id || this.data.editingId === id) {
+      return;
+    }
+
+    const touch = (event.touches && event.touches[0]) || (event.changedTouches && event.changedTouches[0]);
+    this.todoPressAnchor = touch
+      ? {
+          id,
+          x: Number(touch.pageX || touch.clientX || 0),
+          y: Number(touch.pageY || touch.clientY || 0)
+        }
+      : null;
+
+    if (this.data.pressingTodoId === id) {
+      return;
+    }
+
+    this.setData({
+      pressingTodoId: id
+    });
+  },
+
+  handleTodoPressMove(event) {
+    const { id } = event.currentTarget.dataset;
+    if (!id || this.data.pressingTodoId !== id) {
+      return;
+    }
+
+    const anchor = this.todoPressAnchor;
+    const touch = event.touches && event.touches[0];
+    if (!anchor || anchor.id !== id || !touch) {
+      return;
+    }
+
+    const moveX = Number(touch.pageX || touch.clientX || 0) - anchor.x;
+    const moveY = Number(touch.pageY || touch.clientY || 0) - anchor.y;
+    if (moveX * moveX + moveY * moveY > 196) {
+      this.clearTodoPressState();
+    }
+  },
+
+  handleTodoPressEnd() {
+    this.clearTodoPressState();
+  },
+
+  handleTodoPressCancel() {
+    this.clearTodoPressState();
+  },
+
   handleTodoInput(event) {
     this.setData({
       todoInput: event.detail.value
@@ -1010,6 +1115,7 @@ Page({
       return;
     }
 
+<<<<<<< HEAD
     if ((this.data.todos || []).length >= MAX_TODO_COUNT) {
       this.showToast({
         title: `最多 ${MAX_TODO_COUNT} 条待办`,
@@ -1056,6 +1162,61 @@ Page({
         });
         this.appendLog('后端新增失败', normalizeRequestError(error));
       });
+=======
+    const now = new Date().toISOString();
+    const createdId = createId();
+    let todos = this.data.todos.slice();
+    todos.unshift({
+      id: createdId,
+      title,
+      completed: false,
+      createdAt: now,
+      updatedAt: now,
+      displayTime: formatTodoTime(now),
+      isRemoving: false,
+      isToggling: false,
+      isNew: true,
+      isEntering: true
+    });
+
+    todos = sortTodos(todos);
+
+    saveTodos(sanitizeTodos(todos));
+    this.setData({
+      todos: withTodoStyles(todos),
+      todoInput: '',
+      showEmptyState: false
+    });
+
+    this.showToast({
+      title: '添加成功',
+      icon: 'success'
+    });
+
+    const startEnterTransition = () => {
+      if (this.addTodoMotionTimer) {
+        clearTimeout(this.addTodoMotionTimer);
+      }
+      this.addTodoMotionTimer = setTimeout(() => {
+        const nextTodos = this.data.todos.map((item) =>
+          Object.assign({}, item, {
+            isNew: item.id === createdId ? false : item.isNew,
+            isEntering: item.id === createdId ? false : item.isEntering
+          })
+        );
+        this.setData({
+          todos: withTodoStyles(nextTodos)
+        });
+        this.addTodoMotionTimer = null;
+      }, 16);
+    };
+
+    if (typeof wx.nextTick === 'function') {
+      wx.nextTick(startEnterTransition);
+    } else {
+      startEnterTransition();
+    }
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   },
 
   updateTodo() {
@@ -1070,6 +1231,7 @@ Page({
       return;
     }
 
+<<<<<<< HEAD
     this.requestBackend({
       path: `/api/todos/${editingId}`,
       method: 'PATCH',
@@ -1098,6 +1260,37 @@ Page({
         });
         this.appendLog('后端更新失败', normalizeRequestError(error));
       });
+=======
+    const updatedAt = new Date().toISOString();
+    const todos = sortTodos(
+      this.data.todos.map((item) =>
+        item.id === editingId
+          ? Object.assign({}, item, {
+              title,
+              updatedAt,
+              isRemoving: false,
+              isToggling: false,
+              isNew: false,
+              isEntering: false,
+              displayTime: formatTodoTime(updatedAt)
+            })
+          : item
+      )
+    );
+
+    saveTodos(sanitizeTodos(todos));
+    this.setData({
+      todos: withTodoStyles(todos),
+      editingId: '',
+      editingInput: '',
+      showEmptyState: false
+    });
+
+    this.showToast({
+      title: '更新成功',
+      icon: 'success'
+    });
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   },
 
   startEditTodo(event) {
@@ -1107,6 +1300,7 @@ Page({
       return;
     }
 
+    this.clearTodoPressState();
     this.setData({
       editingId: id,
       editingInput: target.title,
@@ -1116,6 +1310,7 @@ Page({
   },
 
   cancelEdit() {
+    this.clearTodoPressState();
     this.setData({
       editingId: '',
       editingInput: ''
@@ -1124,6 +1319,7 @@ Page({
 
   toggleTodo(event) {
     const { id } = event.currentTarget.dataset;
+<<<<<<< HEAD
     const targetIndex = findTodoIndexById(this.data.todos, id);
     const target = targetIndex >= 0 ? this.data.todos[targetIndex] : null;
 
@@ -1146,12 +1342,29 @@ Page({
       [`todos[${targetIndex}].updatedAt`]: Date.now(),
       [`todos[${targetIndex}].displayTime`]: formatTodoTime(Date.now())
     });
+=======
+    this.clearTodoPressState();
+    const todos = this.data.todos.map((item) =>
+      item.id === id
+        ? Object.assign({}, item, {
+            completed: !item.completed,
+            updatedAt: new Date().toISOString(),
+            isRemoving: false,
+            isToggling: true,
+            isNew: false,
+            isEntering: false
+          })
+        : item
+    );
+    this.setData({ todos: withTodoStyles(todos) });
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 
     if (this.toggleTodoTimer) {
       clearTimeout(this.toggleTodoTimer);
     }
 
     this.toggleTodoTimer = setTimeout(() => {
+<<<<<<< HEAD
       request
         .then((todo) => {
           this.upsertTodo(todo, { isToggling: false });
@@ -1169,10 +1382,31 @@ Page({
           this.toggleTodoTimer = null;
         });
     }, 280);
+=======
+      const nextTodos = sortTodos(
+        this.data.todos.map((item) =>
+          item.id === id
+            ? Object.assign({}, item, {
+                isToggling: false,
+                displayTime: formatTodoTime(item.updatedAt || item.createdAt)
+              })
+            : item
+        )
+      );
+
+      saveTodos(sanitizeTodos(nextTodos));
+      this.setData({
+        todos: withTodoStyles(nextTodos),
+        showEmptyState: !nextTodos.length
+      });
+      this.toggleTodoTimer = null;
+    }, 320);
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   },
 
   deleteTodo(event) {
     const { id } = event.currentTarget.dataset;
+    this.clearTodoPressState();
     const targetIndex = findTodoIndexById(this.data.todos, id);
     const target = targetIndex >= 0 ? this.data.todos[targetIndex] : null;
     if (!target || target.isRemoving) {
@@ -1183,13 +1417,24 @@ Page({
       this.cancelEdit();
     }
 
+<<<<<<< HEAD
     const request = this.requestBackend({
       path: `/api/todos/${id}`,
       method: 'DELETE'
+=======
+    const todos = this.data.todos.map((item, index) => {
+      if (item.id === id) {
+        return Object.assign({}, item, {
+          isRemoving: true,
+          isEntering: false
+        });
+      }
+      return item;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
     });
 
     this.setData({
-      [`todos[${targetIndex}].isRemoving`]: true
+      todos: withTodoStyles(todos)
     });
 
     this.removeTodoTimers = this.removeTodoTimers || {};
@@ -1198,6 +1443,7 @@ Page({
     }
 
     this.removeTodoTimers[id] = setTimeout(() => {
+<<<<<<< HEAD
       request
         .then(() => {
           const nextTodos = this.data.todos.filter((item) => item.id !== id);
@@ -1224,6 +1470,23 @@ Page({
           delete this.removeTodoTimers[id];
         });
     }, 240);
+=======
+      const nextTodos = this.data.todos
+        .filter((item) => item.id !== id);
+      saveTodos(sanitizeTodos(nextTodos));
+      this.setData({
+        todos: withTodoStyles(nextTodos),
+        showEmptyState: false
+      });
+      this.scheduleEmptyState(!nextTodos.length, nextTodos.length ? 0 : 320);
+      delete this.removeTodoTimers[id];
+    }, 280);
+
+    this.showToast({
+      title: '删除成功',
+      icon: 'success'
+    });
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   },
 
   connectMqtt() {

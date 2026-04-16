@@ -6,6 +6,7 @@
     <view class="gradient-veil"></view>
   </view>
 
+<<<<<<< HEAD
   <view class="app-topbar glass-card" style="{{topbarStyle}}">
     <view class="app-topbar-inner" style="{{topbarInnerStyle}}">
       <view class="app-topbar-left" style="{{topbarLeftStyle}}">
@@ -18,6 +19,22 @@
 
   <scroll-view wx:if="{{activeTab === 'monitor'}}" class="content-layer tab-page page-enter" scroll-y show-scrollbar="{{false}}">
     <view class="content-inner" style="{{contentInnerStyle}}">
+=======
+  <scroll-view
+    wx:if="{{activeTab === 'monitor'}}"
+    class="content-layer tab-page page-enter"
+    scroll-y
+    enhanced
+    enable-flex="{{true}}"
+    enable-passive="{{true}}"
+    fast-deceleration="{{true}}"
+    scroll-anchoring="{{true}}"
+    refresher-enabled="{{false}}"
+    bounces="{{false}}"
+    show-scrollbar="{{false}}"
+  >
+    <view class="content-inner">
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
       <view class="hero panel glass-card floating-card section-enter">
         <view class="hero-bar panel-head">
           <view class="panel-head-side panel-head-side-left">
@@ -173,8 +190,25 @@
     </view>
   </scroll-view>
 
+<<<<<<< HEAD
   <scroll-view wx:if="{{activeTab === 'todo'}}" class="content-layer tab-page page-enter" scroll-y show-scrollbar="{{false}}">
     <view class="content-inner" style="{{contentInnerStyle}}">
+=======
+  <scroll-view
+    wx:if="{{activeTab === 'todo'}}"
+    class="content-layer tab-page page-enter"
+    scroll-y
+    enhanced
+    enable-flex="{{true}}"
+    enable-passive="{{true}}"
+    fast-deceleration="{{true}}"
+    scroll-anchoring="{{true}}"
+    refresher-enabled="{{false}}"
+    bounces="{{false}}"
+    show-scrollbar="{{false}}"
+  >
+    <view class="content-inner">
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
       <view class="panel glass-card floating-card section-enter">
         <view class="section-head panel-head">
           <view class="panel-head-side panel-head-side-left">
@@ -215,10 +249,10 @@
           wx:for="{{todos}}"
           wx:key="id"
           wx:for-index="index"
-          class="todo-item {{item.isNew ? 'item-enter' : ''}} {{item.completed ? 'completed' : ''}} {{item.isRemoving ? 'is-removing' : ''}} {{item.isToggling ? 'is-toggling' : ''}} {{editingId === item.id ? 'editing' : ''}}"
-          style="{{item.isNew ? 'animation-delay:' + (index * 70) + 'ms;' : ''}}"
+          class="todo-item {{item.completed ? 'completed' : ''}} {{item.isEntering ? 'is-entering' : ''}} {{item.isRemoving ? 'is-removing' : ''}} {{item.isToggling ? 'is-toggling' : ''}} {{editingId === item.id ? 'editing' : ''}} {{pressingTodoId === item.id ? 'is-pressing' : ''}}"
+          style="{{item.style}}"
         >
-          <view class="todo-item-shell glass-card">
+          <view class="todo-item-shell surface-card">
             <block wx:if="{{editingId === item.id}}">
               <view class="todo-inline-editor">
                 <view class="todo-edit-head">
@@ -246,7 +280,15 @@
               </view>
             </block>
             <block wx:else>
-              <view class="todo-main" data-id="{{item.id}}" bindtap="toggleTodo">
+              <view
+                class="todo-main"
+                data-id="{{item.id}}"
+                bindtap="toggleTodo"
+                bindtouchstart="handleTodoPressStart"
+                bindtouchmove="handleTodoPressMove"
+                bindtouchend="handleTodoPressEnd"
+                bindtouchcancel="handleTodoPressCancel"
+              >
                 <view class="todo-check">{{item.completed ? '已完成' : '进行中'}}</view>
                 <view class="todo-content">
                   <view class="todo-title">{{item.title}}</view>

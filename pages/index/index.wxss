@@ -2,7 +2,12 @@
   position: relative;
   min-height: 100vh;
   overflow: hidden;
+<<<<<<< HEAD
   padding: 0 0 210rpx;
+=======
+  padding-bottom: 210rpx;
+  --card-enter-ease: cubic-bezier(0.22, 1, 0.36, 1);
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   transition: background 220ms cubic-bezier(0.668, 0.2, 0.338, 0.847), color 220ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
 }
 
@@ -64,6 +69,23 @@
   height: 720rpx;
 }
 
+<<<<<<< HEAD
+=======
+.blob-2 {
+  top: 180rpx;
+  right: -180rpx;
+  width: 760rpx;
+  height: 760rpx;
+}
+
+.blob-3 {
+  bottom: 0rpx;
+  left: 40rpx;
+  width: 660rpx;
+  height: 660rpx;
+}
+
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 .gradient-veil {
   inset: 0;
 }
@@ -108,11 +130,20 @@
   z-index: 1;
 }
 
+.tab-page {
+  background: transparent;
+}
+
 .content-layer {
   position: fixed;
   inset: 0;
   height: 100vh;
+<<<<<<< HEAD
   z-index: 0;
+=======
+  overflow: hidden;
+  background: transparent;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 .content-inner {
@@ -197,6 +228,7 @@
 .custom-toast {
   position: relative;
   overflow: hidden;
+<<<<<<< HEAD
 }
 
 .app-topbar,
@@ -210,6 +242,8 @@
   overflow: hidden;
   backdrop-filter: blur(10rpx) saturate(136%);
   -webkit-backdrop-filter: blur(10rpx) saturate(136%);
+=======
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 .floating-card {
@@ -452,10 +486,17 @@
 }
 
 .humi-orb {
+<<<<<<< HEAD
   top: -28rpx;
   right: -20rpx;
   width: 220rpx;
   height: 220rpx;
+=======
+  bottom: -42rpx;
+  left: -22rpx;
+  width: 190rpx;
+  height: 190rpx;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 .theme-light .temp-orb {
@@ -653,14 +694,22 @@
   }
   100% {
     opacity: 0;
+<<<<<<< HEAD
     transform: translate3d(0, -12rpx, 0);
+=======
+    transform: translate3d(0, -14rpx, 0);
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   }
 }
 
 @keyframes sensorDigitIn {
   0% {
     opacity: 0;
+<<<<<<< HEAD
     transform: translate3d(0, 12rpx, 0);
+=======
+    transform: translate3d(0, 14rpx, 0);
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   }
   100% {
     opacity: 1;
@@ -700,7 +749,7 @@
 
 .themed-button,
 .themed-secondary {
-  transition: transform 160ms cubic-bezier(0.668, 0.2, 0.338, 0.847), box-shadow 160ms ease, background 160ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
+  transition: transform 160ms cubic-bezier(0.668, 0.2, 0.338, 0.847), box-shadow 160ms cubic-bezier(0.668, 0.2, 0.338, 0.847), background 160ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
 }
 
 .themed-button:active,
@@ -964,26 +1013,54 @@
 }
 
 .todo-list {
-  margin-top: 20rpx;
+  margin-top: 24rpx;
 }
 
 .todo-item {
-  margin-bottom: 18rpx;
+  margin-bottom: 16rpx;
   overflow: hidden;
   max-height: 260rpx;
+<<<<<<< HEAD
   transition:
     max-height 240ms cubic-bezier(0.22, 1, 0.36, 1),
     margin-bottom 240ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+=======
+  transform: translate3d(0, 0, 0) scale(1);
+  opacity: 1;
+  transform-origin: center top;
+  transition: max-height 280ms cubic-bezier(0.668, 0.2, 0.338, 0.847), margin-bottom 280ms cubic-bezier(0.668, 0.2, 0.338, 0.847), transform 280ms cubic-bezier(0.668, 0.2, 0.338, 0.847), opacity 280ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
+}
+
+.todo-item:last-child {
+  margin-bottom: 0;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 .todo-item.editing {
   max-height: 380rpx;
 }
 
+.todo-item.is-entering,
+.todo-item.is-removing {
+  pointer-events: none;
+  will-change: transform, opacity, max-height, margin-bottom;
+}
+
+.todo-item.is-entering {
+  max-height: 0;
+  margin-bottom: 0;
+}
+
+.todo-item.is-removing {
+  max-height: 0;
+  margin-bottom: 0;
+}
+
 .todo-item-shell {
   padding: 24rpx;
+<<<<<<< HEAD
   transition:
     transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -991,6 +1068,11 @@
     border-color 240ms ease,
     opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform, opacity;
+=======
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  transition: transform 180ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 .todo-main {
@@ -1023,7 +1105,7 @@
   font-weight: 700;
   text-align: center;
   color: inherit;
-  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), background 260ms ease, border-color 260ms ease, color 260ms ease, box-shadow 260ms ease;
+  transition: transform 180ms cubic-bezier(0.668, 0.2, 0.338, 0.847), background 220ms cubic-bezier(0.668, 0.2, 0.338, 0.847), border-color 220ms cubic-bezier(0.668, 0.2, 0.338, 0.847), color 220ms cubic-bezier(0.668, 0.2, 0.338, 0.847), box-shadow 220ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
 }
 
 .theme-light .todo-check {
@@ -1056,11 +1138,11 @@
   font-size: 30rpx;
   font-weight: 700;
   word-break: break-all;
-  transition: color 240ms ease, opacity 240ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1), text-decoration-color 240ms ease;
+  transition: color 240ms cubic-bezier(0.668, 0.2, 0.338, 0.847), opacity 240ms cubic-bezier(0.668, 0.2, 0.338, 0.847), transform 260ms cubic-bezier(0.668, 0.2, 0.338, 0.847), text-decoration-color 240ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
 }
 
 .todo-time {
-  transition: color 240ms ease, opacity 240ms ease, transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: color 240ms cubic-bezier(0.668, 0.2, 0.338, 0.847), opacity 240ms cubic-bezier(0.668, 0.2, 0.338, 0.847), transform 260ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
 }
 
 .todo-item.completed .todo-title {
@@ -1196,8 +1278,15 @@
 .tabbar-ios {
   display: flex;
   align-items: center;
+<<<<<<< HEAD
   padding: 12rpx;
+=======
+  min-height: 108rpx;
+  padding: 10rpx;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   border-radius: 999rpx;
+  backdrop-filter: blur(20rpx) saturate(145%);
+  -webkit-backdrop-filter: blur(20rpx) saturate(145%);
 }
 
 .tabbar-indicator-track {
@@ -1247,7 +1336,11 @@
   z-index: 1;
   flex: 1;
   min-height: 84rpx;
+<<<<<<< HEAD
   gap: 12rpx;
+=======
+  gap: 10rpx;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   align-items: center;
   justify-content: center;
   border-radius: 999rpx;
@@ -1255,8 +1348,13 @@
 
 .tabbar-icon {
   position: relative;
+<<<<<<< HEAD
   width: 32rpx;
   height: 32rpx;
+=======
+  width: 30rpx;
+  height: 30rpx;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   flex: none;
 }
 
@@ -1377,6 +1475,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  backdrop-filter: blur(18rpx) saturate(140%);
+  -webkit-backdrop-filter: blur(18rpx) saturate(140%);
 }
 
 .theme-light .theme-toggle-orb {
@@ -1444,6 +1544,11 @@
   padding: 0 24rpx;
   border-radius: 999rpx;
   max-width: 100%;
+<<<<<<< HEAD
+=======
+  backdrop-filter: blur(20rpx) saturate(145%);
+  -webkit-backdrop-filter: blur(20rpx) saturate(145%);
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   will-change: transform, opacity;
   transition: opacity 280ms cubic-bezier(0.668, 0.2, 0.338, 0.847), transform 280ms cubic-bezier(0.668, 0.2, 0.338, 0.847);
 }
@@ -1463,18 +1568,23 @@
 }
 
 .section-enter {
+<<<<<<< HEAD
   animation: toastItemEnter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+=======
+  animation: riseIn 520ms var(--card-enter-ease) both;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 .page-enter {
-  animation: pageFade 320ms cubic-bezier(0.668, 0.2, 0.338, 0.847) both;
+  animation: pageFade 300ms var(--card-enter-ease) both;
 }
 
 .delay-1 {
-  animation-delay: 100ms;
+  animation-delay: 70ms;
 }
 
 .delay-2 {
+<<<<<<< HEAD
   animation-delay: 180ms;
 }
 
@@ -1500,6 +1610,29 @@
 
 .todo-item.is-toggling .todo-item-shell {
   transform: scale(0.988);
+=======
+  animation-delay: 130ms;
+}
+
+.empty-state-enter {
+  animation: riseIn 380ms var(--card-enter-ease) both;
+}
+
+.todo-item.is-pressing .todo-item-shell {
+  transform: translate3d(0, 2rpx, 0) scale(0.992);
+  will-change: transform;
+  transition-duration: 40ms;
+}
+
+.todo-item.is-pressing .todo-check {
+  transform: scale(0.985);
+  transition-duration: 40ms;
+}
+
+.todo-item.is-toggling .todo-item-shell {
+  transform: scale(0.986);
+  will-change: transform;
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 .todo-item.is-toggling .todo-check {
@@ -1509,7 +1642,11 @@
 @keyframes toastItemEnter {
   0% {
     opacity: 0;
+<<<<<<< HEAD
     transform: translate3d(0, 24rpx, 0) scale(0.96);
+=======
+    transform: translate3d(0, 18rpx, 0) scale(0.988);
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   }
   100% {
     opacity: 1;
@@ -1520,15 +1657,22 @@
 @keyframes pageFade {
   from {
     opacity: 0;
-    transform: translateY(10rpx);
+    transform: translate3d(0, 12rpx, 0) scale(0.996);
   }
   to {
     opacity: 1;
+<<<<<<< HEAD
     transform: translateY(0);
   }
 }
 
 
+=======
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+>>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 
 @media (max-width: 680rpx) {
   .sensor-grid {
