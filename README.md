@@ -59,3 +59,28 @@
 1. 阿里云物模型如果没有 `todoList` 这类属性，平台端可能不会按物模型属性解析，但消息仍然可以被订阅端收到。
 2. 如果你准备严格按物模型上报，建议把 `temperature`、`humidity`、`todoList` 对应的属性提前在阿里云产品物模型中创建好。
 3. 当前示例为了避免依赖第三方 npm 包，内置了一个简化 MQTT 客户端，适合课程设计、原型和基础联调场景。
+
+## Backend Access
+
+The mini program backend address is now centralized in:
+
+- `utils/backendConfig.js`
+
+Default LAN setup:
+
+1. Start the local backend on port `3000`
+2. Keep the PC and phone on the same Wi-Fi
+3. Set `baseUrl` in `utils/backendConfig.js` to the PC LAN address
+4. Preview the mini program on the phone
+
+Example:
+
+```js
+baseUrl: 'http://10.232.28.55:3000'
+```
+
+Notes:
+
+- If `baseUrl` is `http://...`, the mini program will automatically use `ws://.../ws/todos`
+- If you change Wi-Fi, the PC LAN IP may also change, so update `baseUrl` when needed
+- This mode is intended for same-LAN debugging and does not require mobile data access

@@ -3,6 +3,7 @@
 
 const { loadSensorState, saveSensorState } = require('../../utils/storage');
 const { resolveAliyunConfig } = require('../../utils/aliyunConfig');
+const { resolveBackendConfig, normalizeBackendBaseUrl } = require('../../utils/backendConfig');
 const { MiniProgramMqttClient } = require('../../utils/mqttClient');
 
 const THEME_KEY = 'page-theme';
@@ -12,30 +13,10 @@ const SENSOR_DIGIT_WIDTH_EM = 0.72;
 const SENSOR_DOT_WIDTH_EM = 0.42;
 const SENSOR_EMPTY_WIDTH_EM = 0.34;
 const MAX_TODO_COUNT = 5;
-const BACKEND_BASE_URL = 'http://127.0.0.1:3000';
-const BACKEND_API_TOKEN = 'wechat-todo-sync-2026';
-const BACKEND_SOCKET_RETRY_MS = 2000;
-
-function normalizeBackendBaseUrl(url) {
-  return String(url || '').trim().replace(/\/+$/, '');
-}
-
-function normalizeBackendSocketUrl(url) {
-  const baseUrl = normalizeBackendBaseUrl(url);
-  if (!baseUrl) {
-    return '';
-  }
-
-  if (baseUrl.startsWith('https://')) {
-    return `wss://${baseUrl.slice('https://'.length)}/ws/todos`;
-  }
-
-  if (baseUrl.startsWith('http://')) {
-    return `ws://${baseUrl.slice('http://'.length)}/ws/todos`;
-  }
-
-  return `${baseUrl}/ws/todos`;
-}
+const BACKEND_CONFIG = resolveBackendConfig();
+const BACKEND_BASE_URL = BACKEND_CONFIG.baseUrl;
+const BACKEND_API_TOKEN = BACKEND_CONFIG.apiToken;
+const BACKEND_SOCKET_RETRY_MS = BACKEND_CONFIG.socketRetryMs;
 
 function buildBackendHeaders() {
   const headers = {
@@ -522,7 +503,7 @@ Page({
   },
 
   initBackendSocket() {
-    this.backendSocketUrl = normalizeBackendSocketUrl(BACKEND_BASE_URL);
+    this.backendSocketUrl = BACKEND_CONFIG.socketUrl;
     this.backendSocketTask = null;
     this.backendSocketClosing = false;
     this.backendSocketReconnectTimer = null;
