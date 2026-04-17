@@ -13,10 +13,28 @@ const SENSOR_DOT_WIDTH_EM = 0.42;
 const SENSOR_EMPTY_WIDTH_EM = 0.34;
 const MAX_TODO_COUNT = 5;
 const BACKEND_BASE_URL = 'http://127.0.0.1:3000';
-const BACKEND_API_TOKEN = 'replace-with-miniapp-token';
+const BACKEND_API_TOKEN = 'wechat-todo-sync-2026';
+const BACKEND_SOCKET_RETRY_MS = 2000;
 
 function normalizeBackendBaseUrl(url) {
   return String(url || '').trim().replace(/\/+$/, '');
+}
+
+function normalizeBackendSocketUrl(url) {
+  const baseUrl = normalizeBackendBaseUrl(url);
+  if (!baseUrl) {
+    return '';
+  }
+
+  if (baseUrl.startsWith('https://')) {
+    return `wss://${baseUrl.slice('https://'.length)}/ws/todos`;
+  }
+
+  if (baseUrl.startsWith('http://')) {
+    return `ws://${baseUrl.slice('http://'.length)}/ws/todos`;
+  }
+
+  return `${baseUrl}/ws/todos`;
 }
 
 function buildBackendHeaders() {
@@ -211,53 +229,15 @@ function withToastStyles(toasts) {
   );
 }
 
-<<<<<<< HEAD
 function decorateTodos(todos) {
   return (todos || [])
     .filter((item) => !item.deleted)
     .map((item) =>
-=======
-function buildTodoStyle(todo) {
-  let translateY = 0;
-  let scale = 1;
-  let opacity = 1;
-
-  if (todo.isEntering) {
-    translateY -= 16;
-    scale = 0.96;
-    opacity = 0;
-  }
-
-  if (todo.isRemoving) {
-    translateY += 16;
-    scale = 0.96;
-    opacity = 0;
-  }
-
-  return `transform: translate3d(0, ${translateY}rpx, 0) scale(${scale}); opacity: ${opacity};`;
-}
-
-function withTodoStyles(todos) {
-  return (todos || []).map((item) =>
-    Object.assign({}, item, {
-      style: buildTodoStyle(item)
-    })
-  );
-}
-
-function decorateTodos(todos) {
-  return withTodoStyles(
-    (todos || []).map((item) =>
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
       Object.assign(
         {
           isRemoving: false,
           isToggling: false,
           isNew: false,
-<<<<<<< HEAD
-=======
-          isEntering: false,
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
           displayTime: formatTodoTime(item.updatedAt || item.createdAt)
         },
         item,
@@ -265,12 +245,7 @@ function decorateTodos(todos) {
           displayTime: formatTodoTime(item.updatedAt || item.createdAt)
         }
       )
-<<<<<<< HEAD
     );
-=======
-    )
-  );
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 }
 
 function findTodoIndexById(todos, id) {
@@ -394,6 +369,7 @@ Page({
     });
 
     this.initMqttClient();
+    this.initBackendSocket();
     this.initTopbarMetrics();
     this.loadTodosFromBackend();
   },
@@ -404,8 +380,23 @@ Page({
     this.initTopbarMetrics();
   },
 
+  onShow() {
+    this.connectBackendSocket();
+    const now = Date.now();
+    if (this.lastBackendSyncAt && now - this.lastBackendSyncAt < 3000) {
+      return;
+    }
+    this.lastBackendSyncAt = now;
+    this.loadTodosFromBackend({ silent: true }).catch(() => {});
+  },
+
+  onHide() {
+    this.disconnectBackendSocket();
+  },
+
   onUnload() {
     this.pageDestroyed = true;
+    this.disconnectBackendSocket();
     if (this.toastTimers) {
       Object.keys(this.toastTimers).forEach((key) => {
         clearTimeout(this.toastTimers[key]);
@@ -502,6 +493,7 @@ Page({
     })
       .then((data) => {
         const nextTodos = this.applyTodoList((data && data.items) || []);
+        this.lastBackendSyncAt = Date.now();
 
         if (config.showToast) {
           this.showToast({
@@ -527,6 +519,128 @@ Page({
 
         throw error;
       });
+  },
+
+  initBackendSocket() {
+    this.backendSocketUrl = normalizeBackendSocketUrl(BACKEND_BASE_URL);
+    this.backendSocketTask = null;
+    this.backendSocketClosing = false;
+    this.backendSocketReconnectTimer = null;
+  },
+
+  connectBackendSocket() {
+    if (this.pageDestroyed || !this.backendSocketUrl || this.backendSocketTask) {
+      return;
+    }
+
+    const headers = {};
+    let socketUrl = this.backendSocketUrl;
+    if (BACKEND_API_TOKEN) {
+      headers.Authorization = `Bearer ${BACKEND_API_TOKEN}`;
+      socketUrl = `${this.backendSocketUrl}?token=${encodeURIComponent(BACKEND_API_TOKEN)}`;
+    }
+
+    this.backendSocketClosing = false;
+    this.backendSocketTask = wx.connectSocket({
+      url: socketUrl,
+      header: headers
+    });
+
+    this.backendSocketTask.onOpen(() => {
+      this.appendLog('待办推送已连接', this.backendSocketUrl);
+    });
+
+    this.backendSocketTask.onMessage((message) => {
+      this.handleBackendSocketMessage(message);
+    });
+
+    this.backendSocketTask.onError((error) => {
+      const errorText = normalizeRequestError(error);
+      this.appendLog('待办推送异常', errorText);
+    });
+
+    this.backendSocketTask.onClose((event) => {
+      this.backendSocketTask = null;
+
+      if (this.pageDestroyed || this.backendSocketClosing) {
+        this.backendSocketClosing = false;
+        return;
+      }
+
+      this.appendLog(
+        '待办推送断开',
+        event && event.code ? `${event.code}${event.reason ? ` ${event.reason}` : ''}` : '连接已关闭'
+      );
+      this.scheduleBackendSocketReconnect();
+    });
+  },
+
+  disconnectBackendSocket() {
+    if (this.backendSocketReconnectTimer) {
+      clearTimeout(this.backendSocketReconnectTimer);
+      this.backendSocketReconnectTimer = null;
+    }
+
+    if (!this.backendSocketTask) {
+      return;
+    }
+
+    this.backendSocketClosing = true;
+    this.backendSocketTask.close({});
+    this.backendSocketTask = null;
+  },
+
+  scheduleBackendSocketReconnect() {
+    if (this.backendSocketReconnectTimer || this.pageDestroyed) {
+      return;
+    }
+
+    this.backendSocketReconnectTimer = setTimeout(() => {
+      this.backendSocketReconnectTimer = null;
+      this.connectBackendSocket();
+    }, BACKEND_SOCKET_RETRY_MS);
+  },
+
+  handleBackendSocketMessage(message) {
+    let parsed = null;
+
+    try {
+      parsed = JSON.parse(message.data);
+    } catch (error) {
+      this.appendLog('待办推送解析失败', String(message.data || ''));
+      return;
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      return;
+    }
+
+    if (parsed.type === 'todo.snapshot') {
+      this.applyTodoList(parsed.todos || []);
+      this.lastBackendSyncAt = Date.now();
+      this.appendLog('待办已同步', '收到全量待办推送');
+      return;
+    }
+
+    if (parsed.type === 'todo.upsert' && parsed.todo) {
+      this.upsertTodo(parsed.todo);
+      this.lastBackendSyncAt = Date.now();
+      this.appendLog(
+        '待办已刷新',
+        `${parsed.todo.id} ${parsed.todo.completed ? '已完成' : '未完成'} ${formatTodoTime(parsed.todo.updatedAt)}`
+      );
+      return;
+    }
+
+    if (parsed.type === 'todo.delete' && parsed.todo) {
+      const nextTodos = (this.data.todos || []).filter((item) => item.id !== parsed.todo.id);
+      this.setData({
+        todos: nextTodos,
+        showEmptyState: !nextTodos.length
+      });
+      this.lastBackendSyncAt = Date.now();
+      this.appendLog('待办已删除', parsed.todo.id);
+    }
   },
 
   initTopbarMetrics() {
@@ -1118,7 +1232,6 @@ Page({
       return;
     }
 
-<<<<<<< HEAD
     if ((this.data.todos || []).length >= MAX_TODO_COUNT) {
       this.showToast({
         title: `最多 ${MAX_TODO_COUNT} 条待办`,
@@ -1165,61 +1278,6 @@ Page({
         });
         this.appendLog('后端新增失败', normalizeRequestError(error));
       });
-=======
-    const now = new Date().toISOString();
-    const createdId = createId();
-    let todos = this.data.todos.slice();
-    todos.unshift({
-      id: createdId,
-      title,
-      completed: false,
-      createdAt: now,
-      updatedAt: now,
-      displayTime: formatTodoTime(now),
-      isRemoving: false,
-      isToggling: false,
-      isNew: true,
-      isEntering: true
-    });
-
-    todos = sortTodos(todos);
-
-    saveTodos(sanitizeTodos(todos));
-    this.setData({
-      todos: withTodoStyles(todos),
-      todoInput: '',
-      showEmptyState: false
-    });
-
-    this.showToast({
-      title: '添加成功',
-      icon: 'success'
-    });
-
-    const startEnterTransition = () => {
-      if (this.addTodoMotionTimer) {
-        clearTimeout(this.addTodoMotionTimer);
-      }
-      this.addTodoMotionTimer = setTimeout(() => {
-        const nextTodos = this.data.todos.map((item) =>
-          Object.assign({}, item, {
-            isNew: item.id === createdId ? false : item.isNew,
-            isEntering: item.id === createdId ? false : item.isEntering
-          })
-        );
-        this.setData({
-          todos: withTodoStyles(nextTodos)
-        });
-        this.addTodoMotionTimer = null;
-      }, 16);
-    };
-
-    if (typeof wx.nextTick === 'function') {
-      wx.nextTick(startEnterTransition);
-    } else {
-      startEnterTransition();
-    }
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   },
 
   updateTodo() {
@@ -1234,7 +1292,6 @@ Page({
       return;
     }
 
-<<<<<<< HEAD
     this.requestBackend({
       path: `/api/todos/${editingId}`,
       method: 'PATCH',
@@ -1263,37 +1320,6 @@ Page({
         });
         this.appendLog('后端更新失败', normalizeRequestError(error));
       });
-=======
-    const updatedAt = new Date().toISOString();
-    const todos = sortTodos(
-      this.data.todos.map((item) =>
-        item.id === editingId
-          ? Object.assign({}, item, {
-              title,
-              updatedAt,
-              isRemoving: false,
-              isToggling: false,
-              isNew: false,
-              isEntering: false,
-              displayTime: formatTodoTime(updatedAt)
-            })
-          : item
-      )
-    );
-
-    saveTodos(sanitizeTodos(todos));
-    this.setData({
-      todos: withTodoStyles(todos),
-      editingId: '',
-      editingInput: '',
-      showEmptyState: false
-    });
-
-    this.showToast({
-      title: '更新成功',
-      icon: 'success'
-    });
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   },
 
   startEditTodo(event) {
@@ -1322,7 +1348,6 @@ Page({
 
   toggleTodo(event) {
     const { id } = event.currentTarget.dataset;
-<<<<<<< HEAD
     const targetIndex = findTodoIndexById(this.data.todos, id);
     const target = targetIndex >= 0 ? this.data.todos[targetIndex] : null;
 
@@ -1345,29 +1370,12 @@ Page({
       [`todos[${targetIndex}].updatedAt`]: Date.now(),
       [`todos[${targetIndex}].displayTime`]: formatTodoTime(Date.now())
     });
-=======
-    this.clearTodoPressState();
-    const todos = this.data.todos.map((item) =>
-      item.id === id
-        ? Object.assign({}, item, {
-            completed: !item.completed,
-            updatedAt: new Date().toISOString(),
-            isRemoving: false,
-            isToggling: true,
-            isNew: false,
-            isEntering: false
-          })
-        : item
-    );
-    this.setData({ todos: withTodoStyles(todos) });
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
 
     if (this.toggleTodoTimer) {
       clearTimeout(this.toggleTodoTimer);
     }
 
     this.toggleTodoTimer = setTimeout(() => {
-<<<<<<< HEAD
       request
         .then((todo) => {
           this.upsertTodo(todo, { isToggling: false });
@@ -1385,26 +1393,6 @@ Page({
           this.toggleTodoTimer = null;
         });
     }, 280);
-=======
-      const nextTodos = sortTodos(
-        this.data.todos.map((item) =>
-          item.id === id
-            ? Object.assign({}, item, {
-                isToggling: false,
-                displayTime: formatTodoTime(item.updatedAt || item.createdAt)
-              })
-            : item
-        )
-      );
-
-      saveTodos(sanitizeTodos(nextTodos));
-      this.setData({
-        todos: withTodoStyles(nextTodos),
-        showEmptyState: !nextTodos.length
-      });
-      this.toggleTodoTimer = null;
-    }, 320);
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   },
 
   deleteTodo(event) {
@@ -1420,24 +1408,21 @@ Page({
       this.cancelEdit();
     }
 
-<<<<<<< HEAD
     const request = this.requestBackend({
       path: `/api/todos/${id}`,
       method: 'DELETE'
-=======
-    const todos = this.data.todos.map((item, index) => {
-      if (item.id === id) {
-        return Object.assign({}, item, {
-          isRemoving: true,
-          isEntering: false
-        });
-      }
-      return item;
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
     });
 
+    const todos = (this.data.todos || []).map((item) =>
+      item.id === id
+        ? Object.assign({}, item, {
+            isRemoving: true
+          })
+        : item
+    );
+
     this.setData({
-      todos: withTodoStyles(todos)
+      todos
     });
 
     this.removeTodoTimers = this.removeTodoTimers || {};
@@ -1446,7 +1431,6 @@ Page({
     }
 
     this.removeTodoTimers[id] = setTimeout(() => {
-<<<<<<< HEAD
       request
         .then(() => {
           const nextTodos = this.data.todos.filter((item) => item.id !== id);
@@ -1473,23 +1457,6 @@ Page({
           delete this.removeTodoTimers[id];
         });
     }, 240);
-=======
-      const nextTodos = this.data.todos
-        .filter((item) => item.id !== id);
-      saveTodos(sanitizeTodos(nextTodos));
-      this.setData({
-        todos: withTodoStyles(nextTodos),
-        showEmptyState: false
-      });
-      this.scheduleEmptyState(!nextTodos.length, nextTodos.length ? 0 : 320);
-      delete this.removeTodoTimers[id];
-    }, 280);
-
-    this.showToast({
-      title: '删除成功',
-      icon: 'success'
-    });
->>>>>>> 14a880ea4c1464cefddc18aff922bb0dcd101701
   },
 
   connectMqtt() {
@@ -1515,11 +1482,11 @@ Page({
   submitTodosToAliyun() {
     this.loadTodosFromBackend({ showToast: true, silent: true })
       .then((todos) => {
-        const message = `已从后端同步 ${todos.length} 条待办\n${normalizeBackendBaseUrl(BACKEND_BASE_URL)}`;
+        const message = `小程序已同步后端 ${todos.length} 条待办\n${normalizeBackendBaseUrl(BACKEND_BASE_URL)}`;
         this.setData({
           incomingMessage: message
         });
-        this.appendLog('手动同步', message);
+        this.appendLog('手动同步后端', message);
       })
       .catch((error) => {
         this.setData({

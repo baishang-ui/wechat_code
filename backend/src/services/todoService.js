@@ -306,16 +306,91 @@ function deleteTodo(id, source = 'miniapp') {
   }).todo;
 }
 
+function normalizeSyncMessage(input) {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
+  const rawType = String(input.type || input.action || input.event || '').trim().toLowerCase();
+  if (rawType) {
+    const explicitMap = {
+      upsert: 'todo.upsert',
+      update: 'todo.upsert',
+      create: 'todo.upsert',
+      add: 'todo.upsert',
+      delete: 'todo.delete',
+      remove: 'todo.delete',
+      del: 'todo.delete',
+      pull: 'todo.pull',
+      sync: 'todo.pull'
+    };
+    const mappedType = explicitMap[rawType] || rawType;
+
+    if (mappedType.startsWith('todo.')) {
+      return {
+        ...input,
+        type: mappedType
+      };
+    }
+  }
+
+  if (Array.isArray(input.todos)) {
+    return {
+      type: 'todo.batch',
+      todos: input.todos,
+      source: input.source,
+      updatedAt: input.updatedAt
+    };
+  }
+
+  const todo = input.todo && typeof input.todo === 'object'
+    ? input.todo
+    : input;
+  const id = todo && String(todo.id || '').trim();
+  const hasTodoFields = Boolean(todo && todo.completed !== undefined);
+  const wantsDelete = Boolean(
+    todo &&
+    (todo.deleted === true || String(todo.op || '').trim().toLowerCase() === 'delete')
+  );
+
+  if (id && (hasTodoFields || wantsDelete)) {
+    if (wantsDelete) {
+      return {
+        type: 'todo.delete',
+        id,
+        title: todo.title,
+        createdAt: todo.createdAt,
+        updatedAt: todo.updatedAt,
+        source: input.source
+      };
+    }
+
+    return {
+      type: 'todo.upsert',
+      todo: {
+        id,
+        completed: todo.completed,
+        updatedAt: todo.updatedAt
+      },
+      updatedAt: todo.updatedAt,
+      source: input.source
+    };
+  }
+
+  return null;
+}
+
 function applySyncMessage(message, fallbackSource = 'hardware') {
   if (!message || typeof message !== 'object') {
     throw createHttpError(400, '消息体必须是 JSON 对象');
   }
 
-  const type = String(message.type || '').trim();
-  const source = String(message.source || fallbackSource || 'hardware');
+  const normalizedMessage = normalizeSyncMessage(message) || message;
+  const type = String(normalizedMessage.type || '').trim();
+  const source = String(normalizedMessage.source || fallbackSource || 'hardware');
 
   if (type === 'todo.pull') {
-    recordEvent('todo.pull_requested', source, message);
+    recordEvent('todo.pull_requested', source, normalizedMessage);
     return {
       changed: false,
       reason: 'pull',
@@ -323,16 +398,59 @@ function applySyncMessage(message, fallbackSource = 'hardware') {
     };
   }
 
+  if (type === 'todo.batch') {
+    const todos = Array.isArray(normalizedMessage.todos) ? normalizedMessage.todos : [];
+    let changed = false;
+
+    todos.forEach((todoItem) => {
+      const targetId = todoItem && String(todoItem.id || '').trim();
+      const current = getTodoById(targetId);
+
+      if (!targetId || !current || current.deleted) {
+        return;
+      }
+
+      const result = saveIncomingTodo({
+        id: targetId,
+        completed: todoItem && todoItem.completed,
+        title: current.title,
+        deleted: false,
+        source,
+        createdAt: current.createdAt,
+        updatedAt: (todoItem && todoItem.updatedAt) || normalizedMessage.updatedAt
+      });
+
+      changed = changed || Boolean(result.applied);
+    });
+
+    return {
+      changed,
+      reason: 'batch',
+      todo: null
+    };
+  }
+
   if (type === 'todo.upsert') {
-    const todo = message.todo || {};
+    const todo = normalizedMessage.todo || {};
+    const targetId = String(todo.id || '').trim();
+    const current = getTodoById(targetId);
+
+    if (!targetId) {
+      throw createHttpError(400, '缺少待办 id');
+    }
+
+    if (!current || current.deleted) {
+      throw createHttpError(404, '待办不存在');
+    }
+
     const result = saveIncomingTodo({
-      id: todo.id,
-      title: todo.title,
+      id: targetId,
+      title: current.title,
       completed: todo.completed,
       deleted: false,
       source,
-      createdAt: todo.createdAt,
-      updatedAt: todo.updatedAt || message.updatedAt
+      createdAt: current.createdAt,
+      updatedAt: todo.updatedAt || normalizedMessage.updatedAt
     });
 
     return {
@@ -343,7 +461,9 @@ function applySyncMessage(message, fallbackSource = 'hardware') {
   }
 
   if (type === 'todo.delete') {
-    const targetId = String(message.id || (message.todo && message.todo.id) || '').trim();
+    const targetId = String(
+      normalizedMessage.id || (normalizedMessage.todo && normalizedMessage.todo.id) || ''
+    ).trim();
 
     if (!targetId) {
       throw createHttpError(400, '删除消息缺少 id');
@@ -352,12 +472,12 @@ function applySyncMessage(message, fallbackSource = 'hardware') {
     const current = getTodoById(targetId);
     const result = saveIncomingTodo({
       id: targetId,
-      title: current ? current.title : message.title,
+      title: current ? current.title : normalizedMessage.title,
       completed: current ? current.completed : false,
       deleted: true,
       source,
-      createdAt: current ? current.createdAt : normalizeTimestamp(message.createdAt),
-      updatedAt: message.updatedAt || Date.now()
+      createdAt: current ? current.createdAt : normalizeTimestamp(normalizedMessage.createdAt),
+      updatedAt: normalizedMessage.updatedAt || Date.now()
     });
 
     return {
@@ -369,7 +489,6 @@ function applySyncMessage(message, fallbackSource = 'hardware') {
 
   throw createHttpError(400, `不支持的消息类型: ${type || '(empty)'}`);
 }
-
 module.exports = {
   createHttpError,
   listTodos,
@@ -380,3 +499,4 @@ module.exports = {
   deleteTodo,
   applySyncMessage
 };
+

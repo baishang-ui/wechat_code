@@ -12,9 +12,21 @@ const {
   applySyncMessage
 } = require('./services/todoService');
 const { AliyunIotService } = require('./services/iotService');
+const { AliyunAmqpService } = require('./services/amqpService');
+const { TodoPushService } = require('./services/todoPushService');
 
 const app = express();
 const iotService = new AliyunIotService(config.aliyun);
+const amqpService = new AliyunAmqpService(config.aliyun);
+const todoPushService = new TodoPushService(config.miniappApiToken, () => listTodos());
+const reportTopics = Array.from(
+  new Set(
+    [config.aliyun.reportTopic]
+      .concat(Array.isArray(config.aliyun.reportTopics) ? config.aliyun.reportTopics : [])
+      .map((topic) => String(topic || '').trim())
+      .filter(Boolean)
+  )
+);
 
 app.use(cors());
 app.use(express.json({ limit: '512kb' }));
@@ -56,6 +68,7 @@ async function handleSyncMessage(message, sourceLabel) {
 
   if (result.reason === 'pull') {
     const todos = await syncSnapshot('device.pull');
+    todoPushService.broadcastSnapshot(todos, 'device.pull');
     return {
       ...result,
       todos
@@ -64,6 +77,7 @@ async function handleSyncMessage(message, sourceLabel) {
 
   if (result.changed) {
     await syncSnapshot(`sync.${result.reason}`);
+    todoPushService.broadcastTodo(result.todo, `sync.${result.reason}`);
   }
 
   return result;
@@ -107,6 +121,7 @@ app.post('/api/todos', requireToken(config.miniappApiToken, 'miniapp'), async (r
     });
 
     await syncSnapshot('miniapp.create');
+    todoPushService.broadcastTodo(todo, 'miniapp.create');
     res.status(201).json(todo);
   } catch (error) {
     next(error);
@@ -122,6 +137,7 @@ app.patch('/api/todos/:id', requireToken(config.miniappApiToken, 'miniapp'), asy
 
     const todo = updateTodo(req.params.id, body, 'miniapp');
     await syncSnapshot('miniapp.update');
+    todoPushService.broadcastTodo(todo, 'miniapp.update');
     res.json(todo);
   } catch (error) {
     next(error);
@@ -132,6 +148,7 @@ app.delete('/api/todos/:id', requireToken(config.miniappApiToken, 'miniapp'), as
   try {
     const todo = deleteTodo(req.params.id, 'miniapp');
     await syncSnapshot('miniapp.delete');
+    todoPushService.broadcastTodo(todo, 'miniapp.delete');
     res.json(todo);
   } catch (error) {
     next(error);
@@ -180,10 +197,32 @@ const server = app.listen(config.port, () => {
   console.log(`db file: ${config.dbFile}`);
   console.log(`[iot] mqtt device login disabled`);
   console.log(`[iot] accessKey configured: ${config.aliyun.accessKeyId ? 'yes' : 'no'}`);
-  console.log(`[iot] tls flag (mqtt legacy): ${config.aliyun.useTls ? 'enabled' : 'disabled'}`);
   console.log(`[iot] publish topic: ${config.aliyun.commandTopic || '(none)'}`);
-  console.log(`[iot] report topic (handled outside backend mqtt): ${config.aliyun.reportTopic || '(none)'}`);
+  console.log(`[amqp] host: ${config.aliyun.amqpHost || '(none)'}`);
+  console.log(`[amqp] consumer group: ${config.aliyun.consumerGroupId || '(none)'}`);
+  console.log(`[amqp] report topic: ${reportTopics.join(', ') || '(none)'}`);
   iotService.start();
+  amqpService.start();
+});
+
+todoPushService.setup(server);
+
+amqpService.setMessageHandler(async ({ topic, parsed, parseError, payloadText }) => {
+  if (!reportTopics.includes(String(topic || '').trim())) {
+    return false;
+  }
+
+  if (!parsed) {
+    console.error('[amqp] ignore invalid json message', {
+      topic,
+      error: parseError ? parseError.message : 'unknown',
+      payloadText
+    });
+    return true;
+  }
+
+  await handleSyncMessage(parsed, 'device-amqp');
+  return true;
 });
 
 function shutdown(signal) {

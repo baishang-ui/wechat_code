@@ -19,8 +19,26 @@ function resolveTopic(value, fallback) {
   return topic.startsWith('/') ? topic : `/${topic}`;
 }
 
+function resolveTopicList(value, fallbackList = []) {
+  const fromEnv = String(value || '')
+    .split(',')
+    .map((item) => resolveTopic(item, ''))
+    .filter(Boolean);
+
+  const merged = fromEnv.length
+    ? fromEnv
+    : (fallbackList || []).map((item) => resolveTopic(item, '')).filter(Boolean);
+
+  return Array.from(new Set(merged));
+}
+
 const rootDir = path.resolve(__dirname, '..');
 const dbFile = path.resolve(rootDir, process.env.DB_FILE || './data/todos.db');
+const productKey = String(process.env.ALIYUN_PRODUCT_KEY || '').trim();
+const deviceName = String(process.env.ALIYUN_DEVICE_NAME || '').trim();
+const fallbackReportTopic = `/${productKey}/${deviceName}/user/report_data`;
+const fallbackCommandTopic = `/${productKey}/${deviceName}/user/todo/command`;
+const requiredReportTopic = '/k1e98mYkQSF/device/user/report_data';
 
 const config = {
   port: Number(process.env.PORT || 3000),
@@ -34,13 +52,22 @@ const config = {
     accessKeyId: String(process.env.ALIYUN_ACCESS_KEY_ID || '').trim(),
     accessKeySecret: String(process.env.ALIYUN_ACCESS_KEY_SECRET || '').trim(),
     iotInstanceId: String(process.env.ALIYUN_IOT_INSTANCE_ID || '').trim(),
-    productKey: String(process.env.ALIYUN_PRODUCT_KEY || '').trim(),
-    deviceName: String(process.env.ALIYUN_DEVICE_NAME || '').trim(),
+    amqpHost: String(process.env.ALIYUN_AMQP_HOST || '').trim(),
+    consumerGroupId: String(process.env.ALIYUN_AMQP_CONSUMER_GROUP_ID || 'DEFAULT_GROUP').trim(),
+    amqpClientId: String(process.env.ALIYUN_AMQP_CLIENT_ID || 'todo-backend-amqp').trim(),
+    amqpRejectUnauthorized: parseBoolean(process.env.ALIYUN_AMQP_REJECT_UNAUTHORIZED, true),
+    productKey,
+    deviceName,
     useTls: parseBoolean(process.env.ALIYUN_USE_TLS, true),
-    reportTopic: resolveTopic(process.env.ALIYUN_DEVICE_REPORT_TOPIC, ''),
+    reportTopic: resolveTopic(process.env.ALIYUN_DEVICE_REPORT_TOPIC, fallbackReportTopic),
+    reportTopics: resolveTopicList(process.env.ALIYUN_DEVICE_REPORT_TOPICS, [
+      process.env.ALIYUN_DEVICE_REPORT_TOPIC,
+      fallbackReportTopic,
+      requiredReportTopic
+    ]),
     commandTopic: resolveTopic(
       process.env.ALIYUN_DEVICE_COMMAND_TOPIC,
-      `/${process.env.ALIYUN_PRODUCT_KEY || ''}/${process.env.ALIYUN_DEVICE_NAME || ''}/user/todo/command`
+      fallbackCommandTopic
     )
   }
 };
