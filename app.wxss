@@ -17,11 +17,6 @@ button {
   background: transparent;
 }
 
-.page-shell {
-  min-height: 100vh;
-  padding: 28rpx 24rpx 40rpx;
-}
-
 .section-title {
   font-size: 42rpx;
   line-height: 1.16;

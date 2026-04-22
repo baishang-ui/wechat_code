@@ -12,6 +12,19 @@ const TOAST_STEP_RPX = 92;
 const SENSOR_DIGIT_WIDTH_EM = 0.72;
 const SENSOR_DOT_WIDTH_EM = 0.42;
 const SENSOR_EMPTY_WIDTH_EM = 0.34;
+const DEFAULT_SENSOR_STATE = {
+  temperature: 26.5,
+  humidity: 58
+};
+const SENSOR_FIELDS = Object.keys(DEFAULT_SENSOR_STATE);
+const SENSOR_FIELD_SUFFIXES = {
+  display: 'DisplayText',
+  frames: 'DigitFrames',
+  measureCurrent: 'MeasureCurrentFrames',
+  measureNext: 'MeasureNextFrames',
+  trackStyle: 'NumberTrackStyle',
+  animating: 'Animating'
+};
 const MAX_TODO_COUNT = 5;
 const BACKEND_CONFIG = resolveBackendConfig();
 const BACKEND_BASE_URL = BACKEND_CONFIG.baseUrl;
@@ -174,6 +187,33 @@ function buildSensorTrackWidthEm(text) {
   return Number(Math.max(widthEm, SENSOR_EMPTY_WIDTH_EM).toFixed(3));
 }
 
+function getSensorFieldName(field, key) {
+  return `${field}${SENSOR_FIELD_SUFFIXES[key]}`;
+}
+
+function buildSensorFieldState(field, value) {
+  const displayText = formatSensorDisplay(value);
+
+  return {
+    [field]: value,
+    [getSensorFieldName(field, 'display')]: displayText,
+    [getSensorFieldName(field, 'frames')]: buildSensorDigitFrames(displayText, displayText),
+    [getSensorFieldName(field, 'measureCurrent')]: buildSensorMeasureFrames(displayText),
+    [getSensorFieldName(field, 'measureNext')]: buildSensorMeasureFrames(displayText),
+    [getSensorFieldName(field, 'trackStyle')]: buildSensorTrackWidthStyle(displayText),
+    [getSensorFieldName(field, 'animating')]: false
+  };
+}
+
+function buildSensorStatePatch(sensorState) {
+  return SENSOR_FIELDS.reduce((patch, field) => {
+    const nextValue =
+      sensorState && sensorState[field] !== undefined ? sensorState[field] : DEFAULT_SENSOR_STATE[field];
+
+    return Object.assign(patch, buildSensorFieldState(field, nextValue));
+  }, {});
+}
+
 function buildToastStyle(toast) {
   let translateX = '-50%';
   let translateY = -(toast.stackIndex || 0) * TOAST_STEP_RPX;
@@ -213,20 +253,21 @@ function withToastStyles(toasts) {
 function decorateTodos(todos) {
   return (todos || [])
     .filter((item) => !item.deleted)
-    .map((item) =>
-      Object.assign(
+    .map((item) => {
+      const displayTime = formatTodoTime(item.updatedAt || item.createdAt);
+
+      return Object.assign(
         {
           isRemoving: false,
           isToggling: false,
-          isNew: false,
-          displayTime: formatTodoTime(item.updatedAt || item.createdAt)
+          isNew: false
         },
         item,
         {
-          displayTime: formatTodoTime(item.updatedAt || item.createdAt)
+          displayTime
         }
-      )
-    );
+      );
+    });
 }
 
 function findTodoIndexById(todos, id) {
@@ -285,80 +326,103 @@ function normalizeTopic(topic) {
   return String(topic || '').trim();
 }
 
+function resolveNavigationLayout() {
+  const systemInfo =
+    typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+  const statusBarHeight = Number(systemInfo.statusBarHeight || 0);
+  const windowWidth = Number(systemInfo.windowWidth || 375);
+  let menuButtonRect = null;
+
+  try {
+    if (typeof wx.getMenuButtonBoundingClientRect === 'function') {
+      menuButtonRect = wx.getMenuButtonBoundingClientRect();
+    }
+  } catch (error) {
+    menuButtonRect = null;
+  }
+
+  if (!menuButtonRect || !menuButtonRect.top || !menuButtonRect.height) {
+    const titleHeight = 24;
+    const titleTop = statusBarHeight + 10;
+    const navBarHeight = titleTop + titleHeight;
+
+    return {
+      navBarStyle: `height: ${navBarHeight}px;`,
+      navTitleStyle: `top: ${titleTop}px; height: ${titleHeight}px; line-height: ${titleHeight}px; left: 24rpx; right: 24rpx;`,
+      contentLayerStyle: `padding-top: ${navBarHeight + 12}px;`
+    };
+  }
+
+  const capsuleTop = Number(menuButtonRect.top || 0);
+  const capsuleHeight = Number(menuButtonRect.height || 32);
+  const capsuleBottom = Number(menuButtonRect.bottom || capsuleTop + capsuleHeight);
+  const capsuleInset = Math.max(windowWidth - Number(menuButtonRect.left || windowWidth), 24);
+  const titleInset = Math.max(capsuleInset + 16, 112);
+  const titleHeight = 24;
+  const titleTop = capsuleTop + Math.max(Math.round((capsuleHeight - titleHeight) / 2), 0);
+  const navBarHeight = capsuleBottom;
+
+  return {
+    navBarStyle: `height: ${navBarHeight}px;`,
+    navTitleStyle: `top: ${titleTop}px; height: ${titleHeight}px; line-height: ${titleHeight}px; left: ${titleInset}px; right: ${titleInset}px;`,
+    contentLayerStyle: `padding-top: ${navBarHeight + 12}px;`
+  };
+}
+
 Page({
-  data: {
-    topbarStyle: '',
-    topbarInnerStyle: '',
-    topbarLeftStyle: '',
-    topbarTitleSlotStyle: '',
-    contentInnerStyle: '',
-    activeTab: 'monitor',
-    tabbarProgress: 0,
-    tabbarIndicatorStyle: '--tabbar-translate: 0%;',
-    tabbarPressing: false,
-    themeAnimating: false,
-    showEmptyState: false,
-    toasts: [],
-    theme: 'light',
-    temperature: 26.5,
-    humidity: 58,
-    temperatureDisplayText: formatSensorDisplay(26.5),
-    humidityDisplayText: formatSensorDisplay(58),
-    temperatureDigitFrames: buildSensorDigitFrames(26.5, 26.5),
-    humidityDigitFrames: buildSensorDigitFrames(58, 58),
-    temperatureMeasureCurrentFrames: buildSensorMeasureFrames(26.5),
-    temperatureMeasureNextFrames: buildSensorMeasureFrames(26.5),
-    humidityMeasureCurrentFrames: buildSensorMeasureFrames(58),
-    humidityMeasureNextFrames: buildSensorMeasureFrames(58),
-    temperatureNumberTrackStyle: buildSensorTrackWidthStyle(26.5),
-    humidityNumberTrackStyle: buildSensorTrackWidthStyle(58),
-    temperatureAnimating: false,
-    humidityAnimating: false,
-    mqttStatusText: 'MQTT 未连接',
-    mqttConnected: false,
-    todoInput: '',
-    editingId: '',
-    editingInput: '',
-    todos: [],
-    pressingTodoId: '',
-    incomingMessage: '',
-    logs: []
-  },
+  data: Object.assign(
+    {
+      activeTab: 'monitor',
+      tabbarIndicatorStyle: '--tabbar-translate: 0%;',
+      tabbarPressing: false,
+      navBarStyle: '',
+      navTitleStyle: '',
+      contentLayerStyle: '',
+      themeAnimating: false,
+      showEmptyState: false,
+      toasts: [],
+      theme: 'light',
+      mqttStatusText: 'MQTT 未连接',
+      mqttConnected: false,
+      todoInput: '',
+      editingId: '',
+      editingInput: '',
+      todos: [],
+      logs: []
+    },
+    buildSensorStatePatch(DEFAULT_SENSOR_STATE)
+  ),
 
   onLoad() {
     this.pageDestroyed = false;
     this.aliyunConfig = resolveAliyunConfig();
     const sensorState = loadSensorState();
     const theme = this.loadTheme();
+    const navigationLayout = resolveNavigationLayout();
 
-    this.setData({
-      theme,
-      temperature: sensorState.temperature,
-      humidity: sensorState.humidity,
-      temperatureDisplayText: formatSensorDisplay(sensorState.temperature),
-      humidityDisplayText: formatSensorDisplay(sensorState.humidity),
-      temperatureDigitFrames: buildSensorDigitFrames(sensorState.temperature, sensorState.temperature),
-      humidityDigitFrames: buildSensorDigitFrames(sensorState.humidity, sensorState.humidity),
-      temperatureMeasureCurrentFrames: buildSensorMeasureFrames(sensorState.temperature),
-      temperatureMeasureNextFrames: buildSensorMeasureFrames(sensorState.temperature),
-      humidityMeasureCurrentFrames: buildSensorMeasureFrames(sensorState.humidity),
-      humidityMeasureNextFrames: buildSensorMeasureFrames(sensorState.humidity),
-      temperatureNumberTrackStyle: buildSensorTrackWidthStyle(sensorState.temperature),
-      humidityNumberTrackStyle: buildSensorTrackWidthStyle(sensorState.humidity),
-      todos: [],
-      showEmptyState: false
-    });
+    this.setData(
+      Object.assign(
+        {
+          navBarStyle: navigationLayout.navBarStyle,
+          navTitleStyle: navigationLayout.navTitleStyle,
+          contentLayerStyle: navigationLayout.contentLayerStyle,
+          theme,
+          todos: [],
+          showEmptyState: false
+        },
+        buildSensorStatePatch(sensorState)
+      )
+    );
 
     this.initMqttClient();
     this.initBackendSocket();
-    this.initTopbarMetrics();
     this.loadTodosFromBackend();
   },
 
   onReady() {
-    this.syncSensorTrackWidth('temperature');
-    this.syncSensorTrackWidth('humidity');
-    this.initTopbarMetrics();
+    SENSOR_FIELDS.forEach((field) => {
+      this.syncSensorTrackWidth(field);
+    });
   },
 
   onShow() {
@@ -389,9 +453,6 @@ Page({
     if (this.toggleTodoTimer) {
       clearTimeout(this.toggleTodoTimer);
     }
-    if (this.addTodoMotionTimer) {
-      clearTimeout(this.addTodoMotionTimer);
-    }
     if (this.themeAnimationTimer) {
       clearTimeout(this.themeAnimationTimer);
     }
@@ -405,7 +466,6 @@ Page({
         clearTimeout(this.sensorAnimationTimers[key]);
       });
     }
-    this.todoPressAnchor = null;
     if (this.mqttClient) {
       this.mqttClient.disconnect();
     }
@@ -624,66 +684,10 @@ Page({
     }
   },
 
-  initTopbarMetrics() {
-    if (this.pageDestroyed) {
-      return;
-    }
-
-    let statusBarHeight = 0;
-    let windowWidth = 375;
-    let capsuleTop = 0;
-    let capsuleHeight = 0;
-    let capsuleBottom = 0;
-    let capsuleLeft = 0;
-
-    try {
-      const systemInfo = wx.getSystemInfoSync();
-      statusBarHeight = systemInfo.statusBarHeight || 0;
-      windowWidth = systemInfo.windowWidth || systemInfo.screenWidth || 375;
-    } catch (error) {
-      statusBarHeight = 0;
-    }
-
-    try {
-      const capsule = wx.getMenuButtonBoundingClientRect();
-      capsuleTop = capsule.top || 0;
-      capsuleHeight = capsule.height || 0;
-      capsuleBottom = capsule.bottom || 0;
-      capsuleLeft = capsule.left || 0;
-    } catch (error) {
-      capsuleTop = 0;
-      capsuleHeight = 0;
-      capsuleBottom = 0;
-      capsuleLeft = 0;
-    }
-
-    if (!capsuleTop || !capsuleHeight || !capsuleBottom) {
-      capsuleHeight = 32;
-      capsuleTop = statusBarHeight + 10;
-      capsuleBottom = capsuleTop + capsuleHeight;
-      capsuleLeft = windowWidth - 96;
-    }
-
-    const capsuleRightInset = Math.max(0, windowWidth - capsuleLeft);
-    const topbarHeight = capsuleBottom + 16;
-    const innerTopOffset = Math.max(0, capsuleTop - statusBarHeight);
-    const contentPaddingTop = topbarHeight + 12;
-    const titleWidth = Math.max(0, windowWidth - capsuleRightInset - 28);
-
-    this.setData({
-      topbarStyle: `height:${topbarHeight}px;padding-top:${statusBarHeight}px;`,
-      topbarInnerStyle: `margin-top:${innerTopOffset}px;height:${capsuleHeight}px;padding-right:${capsuleRightInset + 12}px;`,
-      topbarLeftStyle: `height:${capsuleHeight}px;`,
-      topbarTitleSlotStyle: `height:${capsuleHeight}px;max-width:${titleWidth}px;`,
-      contentInnerStyle: `padding-top:${contentPaddingTop}px;`
-    });
-  },
-
   measureSensorTrackWidth(field) {
     return new Promise((resolve) => {
-      const isTemperature = field === 'temperature';
-      const currentSelector = isTemperature ? '#temperatureMeasureCurrentTrack' : '#humidityMeasureCurrentTrack';
-      const nextSelector = isTemperature ? '#temperatureMeasureNextTrack' : '#humidityMeasureNextTrack';
+      const currentSelector = `#${field}MeasureCurrentTrack`;
+      const nextSelector = `#${field}MeasureNextTrack`;
 
       wx.nextTick(() => {
         const query = wx.createSelectorQuery();
@@ -700,9 +704,8 @@ Page({
   },
 
   syncSensorTrackWidth(field) {
-    const isTemperature = field === 'temperature';
-    const trackStyleField = isTemperature ? 'temperatureNumberTrackStyle' : 'humidityNumberTrackStyle';
-    const currentText = formatSensorDisplay(this.data[isTemperature ? 'temperatureDisplayText' : 'humidityDisplayText']);
+    const trackStyleField = getSensorFieldName(field, 'trackStyle');
+    const currentText = formatSensorDisplay(this.data[getSensorFieldName(field, 'display')]);
     const token = (this.sensorAnimationTokens && this.sensorAnimationTokens[field]) || 0;
 
     this.measureSensorTrackWidth(field).then(({ currentWidth }) => {
@@ -721,14 +724,13 @@ Page({
   },
 
   animateSensorValue(field, nextValue) {
-    const isTemperature = field === 'temperature';
-    const valueField = isTemperature ? 'temperature' : 'humidity';
-    const displayField = isTemperature ? 'temperatureDisplayText' : 'humidityDisplayText';
-    const framesField = isTemperature ? 'temperatureDigitFrames' : 'humidityDigitFrames';
-    const measureCurrentFramesField = isTemperature ? 'temperatureMeasureCurrentFrames' : 'humidityMeasureCurrentFrames';
-    const measureNextFramesField = isTemperature ? 'temperatureMeasureNextFrames' : 'humidityMeasureNextFrames';
-    const trackStyleField = isTemperature ? 'temperatureNumberTrackStyle' : 'humidityNumberTrackStyle';
-    const animatingField = isTemperature ? 'temperatureAnimating' : 'humidityAnimating';
+    const valueField = field;
+    const displayField = getSensorFieldName(field, 'display');
+    const framesField = getSensorFieldName(field, 'frames');
+    const measureCurrentFramesField = getSensorFieldName(field, 'measureCurrent');
+    const measureNextFramesField = getSensorFieldName(field, 'measureNext');
+    const trackStyleField = getSensorFieldName(field, 'trackStyle');
+    const animatingField = getSensorFieldName(field, 'animating');
     const currentValue = this.data[valueField];
     const nextText = formatSensorDisplay(nextValue);
     const currentText = formatSensorDisplay(this.data[displayField] || currentValue);
@@ -1010,9 +1012,7 @@ Page({
         console.log('[MQTT recv_data]', message.topic, message.payload);
         this.appendLog('收到消息', `${message.topic}\n${message.payload}`);
       }
-      const patch = {
-        incomingMessage: `${message.topic}\n${message.payload}`
-      };
+      const patch = {};
 
       if (isCloudDataTopic && cloudSensorState) {
         if (cloudSensorState.temperature !== null) {
@@ -1033,7 +1033,9 @@ Page({
         );
       }
 
-      this.setData(patch);
+      if (Object.keys(patch).length) {
+        this.setData(patch);
+      }
     });
 
     this.mqttClient.on('error', (error) => {
@@ -1044,9 +1046,6 @@ Page({
         title: '连接失败',
         icon: 'none'
       });
-      this.setData({
-        incomingMessage: errorText
-      });
       this.appendLog('连接失败', errorText);
     });
 
@@ -1055,9 +1054,6 @@ Page({
         event && event.code
           ? `连接关闭: ${event.code}${event.reason ? ` ${event.reason}` : ''}`
           : '连接已关闭';
-      this.setData({
-        incomingMessage: closeText
-      });
       this.appendLog('连接关闭', closeText);
     });
 
@@ -1074,7 +1070,6 @@ Page({
     const safeProgress = tab === 'todo' ? 1 : 0;
 
     this.setData({
-      tabbarProgress: safeProgress,
       tabbarIndicatorStyle: `--tabbar-translate: ${safeProgress * 100}%;`
     });
   },
@@ -1128,67 +1123,6 @@ Page({
       '界面刷新',
       `温度 ${this.data.temperature}C / 湿度 ${this.data.humidity}%`
     );
-  },
-
-  clearTodoPressState() {
-    this.todoPressAnchor = null;
-    if (!this.data.pressingTodoId) {
-      return;
-    }
-    this.setData({
-      pressingTodoId: ''
-    });
-  },
-
-  handleTodoPressStart(event) {
-    const { id } = event.currentTarget.dataset;
-    if (!id || this.data.editingId === id) {
-      return;
-    }
-
-    const touch = (event.touches && event.touches[0]) || (event.changedTouches && event.changedTouches[0]);
-    this.todoPressAnchor = touch
-      ? {
-          id,
-          x: Number(touch.pageX || touch.clientX || 0),
-          y: Number(touch.pageY || touch.clientY || 0)
-        }
-      : null;
-
-    if (this.data.pressingTodoId === id) {
-      return;
-    }
-
-    this.setData({
-      pressingTodoId: id
-    });
-  },
-
-  handleTodoPressMove(event) {
-    const { id } = event.currentTarget.dataset;
-    if (!id || this.data.pressingTodoId !== id) {
-      return;
-    }
-
-    const anchor = this.todoPressAnchor;
-    const touch = event.touches && event.touches[0];
-    if (!anchor || anchor.id !== id || !touch) {
-      return;
-    }
-
-    const moveX = Number(touch.pageX || touch.clientX || 0) - anchor.x;
-    const moveY = Number(touch.pageY || touch.clientY || 0) - anchor.y;
-    if (moveX * moveX + moveY * moveY > 196) {
-      this.clearTodoPressState();
-    }
-  },
-
-  handleTodoPressEnd() {
-    this.clearTodoPressState();
-  },
-
-  handleTodoPressCancel() {
-    this.clearTodoPressState();
   },
 
   handleTodoInput(event) {
@@ -1310,7 +1244,6 @@ Page({
       return;
     }
 
-    this.clearTodoPressState();
     this.setData({
       editingId: id,
       editingInput: target.title,
@@ -1320,7 +1253,6 @@ Page({
   },
 
   cancelEdit() {
-    this.clearTodoPressState();
     this.setData({
       editingId: '',
       editingInput: ''
@@ -1378,7 +1310,6 @@ Page({
 
   deleteTodo(event) {
     const { id } = event.currentTarget.dataset;
-    this.clearTodoPressState();
     const targetIndex = findTodoIndexById(this.data.todos, id);
     const target = targetIndex >= 0 ? this.data.todos[targetIndex] : null;
     if (!target || target.isRemoving) {
@@ -1464,15 +1395,10 @@ Page({
     this.loadTodosFromBackend({ showToast: true, silent: true })
       .then((todos) => {
         const message = `小程序已同步后端 ${todos.length} 条待办\n${normalizeBackendBaseUrl(BACKEND_BASE_URL)}`;
-        this.setData({
-          incomingMessage: message
-        });
         this.appendLog('手动同步后端', message);
       })
       .catch((error) => {
-        this.setData({
-          incomingMessage: normalizeRequestError(error)
-        });
+        this.appendLog('手动同步失败', normalizeRequestError(error));
       });
   }
 });
