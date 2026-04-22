@@ -1,4 +1,4 @@
-﻿<view class="page-shell theme-{{theme}} {{themeAnimating ? 'is-theme-transition' : ''}}">
+<view class="page-shell theme-{{theme}} {{themeAnimating ? 'is-theme-transition' : ''}}">
   <view class="bg-gradient">
     <view class="gradient-blob blob-1"></view>
     <view class="gradient-blob blob-2"></view>
@@ -11,7 +11,7 @@
     <view class="app-nav-title" style="{{navTitleStyle}}">智能桌面盒子</view>
   </view>
 
-  <view wx:if="{{activeTab === 'monitor'}}" class="content-page tab-page page-enter" style="{{contentLayerStyle}}">
+  <view wx:if="{{activeTab === 'monitor'}}" class="content-page tab-page page-enter" style="position: relative; left: 0rpx; top: 210rpx">
       <view class="top-card panel glass-card floating-card section-enter">
         <view class="panel-head">
           <view class="section-kicker with-icon panel-head-leading">
