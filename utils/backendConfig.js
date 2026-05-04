@@ -1,6 +1,6 @@
 const backendConfig = {
   // Default LAN backend address for phone + PC on the same Wi-Fi.
-  baseUrl: 'http://10.232.28.55:3000',
+  baseUrl: 'http://10.232.5.182:3000',
   apiToken: 'wechat-todo-sync-2026',
   socketRetryMs: 2000
 };

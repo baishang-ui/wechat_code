@@ -317,6 +317,127 @@
   margin-top: 24rpx;
 }
 
+.sensor-chart {
+  margin-top: 16rpx;
+  padding: 20rpx 20rpx 16rpx;
+}
+
+.sensor-chart-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.sensor-chart-title {
+  flex: none;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.sensor-chart-legend {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10rpx 14rpx;
+}
+
+.sensor-chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+  font-size: 20rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.sensor-chart-legend-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  flex: none;
+}
+
+.sensor-chart-legend-value {
+  font-weight: 800;
+}
+
+.sensor-chart-plot {
+  width: 100%;
+  height: 150rpx;
+  margin-top: 14rpx;
+  overflow: hidden;
+}
+
+.sensor-chart-canvas {
+  display: block;
+  width: 100%;
+  height: 150rpx;
+  pointer-events: none;
+}
+
+.sensor-chart-axis {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  min-height: 24rpx;
+  margin-top: 6rpx;
+  gap: 4rpx;
+}
+
+.sensor-chart-axis-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-light .sensor-chart-title {
+  color: #1a2230;
+}
+
+.theme-dark .sensor-chart-title {
+  color: #f3f7fd;
+}
+
+.theme-light .sensor-chart-legend-item,
+.theme-light .sensor-chart-axis-label {
+  color: #738193;
+}
+
+.theme-dark .sensor-chart-legend-item,
+.theme-dark .sensor-chart-axis-label {
+  color: #9fb0c2;
+}
+
+.sensor-chart-legend-item.temperature .sensor-chart-legend-dot {
+  background: #ff707e;
+  box-shadow: 0 0 18rpx rgba(255, 112, 126, 0.28);
+}
+
+.sensor-chart-legend-item.humidity .sensor-chart-legend-dot {
+  background: #4ca9e5;
+  box-shadow: 0 0 18rpx rgba(76, 169, 229, 0.28);
+}
+
+.theme-dark .sensor-chart-legend-item.temperature .sensor-chart-legend-dot {
+  background: #ff7eaa;
+  box-shadow: 0 0 18rpx rgba(255, 126, 170, 0.26);
+}
+
+.theme-dark .sensor-chart-legend-item.humidity .sensor-chart-legend-dot {
+  background: #49dbff;
+  box-shadow: 0 0 18rpx rgba(73, 219, 255, 0.24);
+}
+
 .hero-chip {
   display: inline-flex;
   align-items: center;
@@ -510,6 +631,8 @@
   min-height: 64rpx;
   display: flex;
   align-items: flex-end;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 .sensor-number-track {
@@ -1533,5 +1656,18 @@
 @media (max-width: 680rpx) {
   .sensor-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sensor-chart-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .sensor-chart-legend {
+    justify-content: flex-start;
+  }
+
+  .sensor-chart-axis-label {
+    font-size: 17rpx;
   }
 }

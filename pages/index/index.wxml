@@ -119,6 +119,25 @@
             </view>
           </view>
 
+          <view class="sensor-chart surface-card">
+            <view class="sensor-chart-head">
+              <view class="sensor-chart-title">最近五次数据</view>
+              <view class="sensor-chart-legend">
+                <view wx:for="{{sensorChartLegend}}" wx:key="key" class="sensor-chart-legend-item {{item.key}}">
+                  <view class="sensor-chart-legend-dot"></view>
+                  <text>{{item.label}}</text>
+                  <text class="sensor-chart-legend-value">{{item.valueText}}</text>
+                </view>
+              </view>
+            </view>
+            <view id="sensorTrendPlot" class="sensor-chart-plot">
+              <canvas id="sensorTrendCanvas" canvas-id="sensorTrendCanvas" type="2d" class="sensor-chart-canvas" style="width: 100%; height: 150rpx;" disable-scroll="true"></canvas>
+            </view>
+            <view class="sensor-chart-axis">
+              <view wx:for="{{sensorChartAxisLabels}}" wx:key="id" class="sensor-chart-axis-label">{{item.label}}</view>
+            </view>
+          </view>
+
           <view class="action-row sensor-actions">
             <button class="secondary-button themed-secondary hero-button icon-button" bindtap="forceRefreshCloudData">
               <image class="button-icon button-icon-sm" src="/assets/icons/refresh.svg" mode="aspectFit" />
