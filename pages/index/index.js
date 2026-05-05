@@ -17,9 +17,11 @@ const DEFAULT_SENSOR_STATE = {
   humidity: 58
 };
 const SENSOR_HISTORY_LIMIT = 5;
-const SENSOR_CHART_ANIMATION_MS = 420;
-const SENSOR_CHART_RETRY_DELAY_MS = 80;
-const SENSOR_CHART_MAX_RETRY = 8;
+const SENSOR_CHART_X_START = 4;
+const SENSOR_CHART_X_END = 96;
+const SENSOR_CHART_Y_TOP = 8;
+const SENSOR_CHART_Y_BOTTOM = 92;
+const SENSOR_CHART_ASPECT_RATIO = 4;
 const SENSOR_CHART_SERIES = [
   {
     key: 'temperature',
@@ -36,8 +38,6 @@ const SENSOR_FIELDS = Object.keys(DEFAULT_SENSOR_STATE);
 const SENSOR_FIELD_SUFFIXES = {
   display: 'DisplayText',
   frames: 'DigitFrames',
-  measureCurrent: 'MeasureCurrentFrames',
-  measureNext: 'MeasureNextFrames',
   trackStyle: 'NumberTrackStyle',
   animating: 'Animating'
 };
@@ -60,6 +60,7 @@ function buildBackendHeaders() {
 }
 
 function requestPromise(options) {
+  // 将 wx.request 封装成 Promise，方便页面方法统一处理请求结果。
   return new Promise((resolve, reject) => {
     wx.request(
       Object.assign({}, options, {
@@ -161,6 +162,7 @@ function formatSensorDisplay(value) {
 }
 
 function buildSensorDigitFrames(previousText, nextText, fixedLength) {
+  // 将新旧传感器数值拆成对齐的字符槽，用于数字滚动动画。
   const prev = formatSensorDisplay(previousText);
   const next = formatSensorDisplay(nextText);
   const length = Math.max(fixedLength || 0, prev.length, next.length, 1);
@@ -189,10 +191,6 @@ function buildSensorDigitFrames(previousText, nextText, fixedLength) {
   });
 }
 
-function buildSensorMeasureFrames(text) {
-  return buildSensorDigitFrames(text, text);
-}
-
 function getSensorCharWidthEm(char) {
   if (!char || char === ' ') {
     return SENSOR_EMPTY_WIDTH_EM;
@@ -210,6 +208,7 @@ function buildSensorTrackWidthStyleByEm(widthEm) {
 }
 
 function buildSensorTrackWidthEm(text) {
+  // 直接按字符宽度估算数字轨道宽度，避免运行时测量隐藏节点。
   const value = formatSensorDisplay(text);
   const widthEm = value.split('').reduce((total, char) => total + getSensorCharWidthEm(char), 0);
   return Number(Math.max(widthEm, SENSOR_EMPTY_WIDTH_EM).toFixed(3));
@@ -220,6 +219,7 @@ function getSensorFieldName(field, key) {
 }
 
 function buildSensorFieldState(field, value) {
+  // 生成单个传感器数值所需的响应式字段：文本、数字帧、宽度和动画状态。
   const displayText = formatSensorDisplay(value);
   const trackWidthEm = buildSensorTrackWidthEm(displayText);
 
@@ -227,8 +227,6 @@ function buildSensorFieldState(field, value) {
     [field]: value,
     [getSensorFieldName(field, 'display')]: displayText,
     [getSensorFieldName(field, 'frames')]: buildSensorDigitFrames(displayText, displayText),
-    [getSensorFieldName(field, 'measureCurrent')]: buildSensorMeasureFrames(displayText),
-    [getSensorFieldName(field, 'measureNext')]: buildSensorMeasureFrames(displayText),
     [getSensorFieldName(field, 'trackStyle')]: buildSensorTrackWidthStyleByEm(trackWidthEm),
     [getSensorFieldName(field, 'animating')]: false
   };
@@ -268,6 +266,93 @@ function formatSensorChartTime(value) {
   return `${padTime(date.getHours())}:${padTime(date.getMinutes())}`;
 }
 
+function buildSensorChartPoints(history, seriesKey) {
+  // 将最近的历史数据转换成百分比坐标，交给 WXML/CSS 渲染折线图。
+  const normalizedHistory = normalizeSensorHistory(history);
+  const values = normalizedHistory
+    .map((item) => normalizeSensorNumber(item && item[seriesKey]))
+    .filter((value) => value !== null);
+
+  if (!values.length) {
+    return [];
+  }
+
+  const minValue = Math.min.apply(null, values);
+  const maxValue = Math.max.apply(null, values);
+  const valueRange = maxValue - minValue || 1;
+  const paddedMin = minValue - valueRange * 0.12;
+  const paddedMax = maxValue + valueRange * 0.12;
+  const paddedRange = paddedMax - paddedMin || 1;
+  const xRange = SENSOR_CHART_X_END - SENSOR_CHART_X_START;
+  const yRange = SENSOR_CHART_Y_BOTTOM - SENSOR_CHART_Y_TOP;
+  const itemCount = Math.max(normalizedHistory.length, 1);
+  const slotOffset = Math.max(SENSOR_HISTORY_LIMIT - itemCount, 0);
+
+  return normalizedHistory
+    .map((item, index) => {
+      const value = normalizeSensorNumber(item && item[seriesKey]);
+
+      if (value === null) {
+        return null;
+      }
+
+      const slotIndex = slotOffset + index;
+      const x = SENSOR_CHART_X_START + (xRange * slotIndex) / (SENSOR_HISTORY_LIMIT - 1);
+      const y = SENSOR_CHART_Y_TOP + (1 - (value - paddedMin) / paddedRange) * yRange;
+
+      return {
+        id: `sensor-chart-${seriesKey}-point-${item.timestamp}-${index}`,
+        x,
+        y,
+        latest: index === normalizedHistory.length - 1,
+        style: `left: ${x.toFixed(3)}%; top: ${y.toFixed(3)}%;`
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildSensorChartSegments(points, seriesKey) {
+  // 用定位和旋转的 view 表示线段，避开 canvas 重绘时序问题。
+  if (!points.length) {
+    return [];
+  }
+
+  if (points.length === 1) {
+    const point = points[0];
+    return [
+      {
+        id: `sensor-chart-${seriesKey}-segment-single-${point.id}`,
+        style: `left: ${Math.max(point.x - 4, SENSOR_CHART_X_START).toFixed(3)}%; top: ${point.y.toFixed(3)}%; width: 8%; transform: rotate(0deg);`
+      }
+    ];
+  }
+
+  return points.slice(0, -1).map((point, index) => {
+    const nextPoint = points[index + 1];
+    const dx = nextPoint.x - point.x;
+    const dy = (nextPoint.y - point.y) / SENSOR_CHART_ASPECT_RATIO;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    return {
+      id: `sensor-chart-${seriesKey}-segment-${point.id}-${nextPoint.id}`,
+      style: `left: ${point.x.toFixed(3)}%; top: ${point.y.toFixed(3)}%; width: ${length.toFixed(3)}%; transform: rotate(${angle.toFixed(3)}deg);`
+    };
+  });
+}
+
+function buildSensorChartSeries(history) {
+  return SENSOR_CHART_SERIES.map((series) => {
+    const points = buildSensorChartPoints(history, series.key);
+
+    return {
+      key: series.key,
+      points,
+      segments: buildSensorChartSegments(points, series.key)
+    };
+  });
+}
+
 function createSensorHistoryEntry(sensorState, timestamp = Date.now()) {
   const temperature = normalizeSensorNumber(sensorState && sensorState.temperature);
   const humidity = normalizeSensorNumber(sensorState && sensorState.humidity);
@@ -285,6 +370,7 @@ function createSensorHistoryEntry(sensorState, timestamp = Date.now()) {
 }
 
 function normalizeSensorHistory(history) {
+  // 只保留有效传感器读数，并将图表数据限制在最近五次。
   if (!Array.isArray(history)) {
     return [];
   }
@@ -324,6 +410,7 @@ function buildSensorHistorySeed(history, sensorState) {
 }
 
 function buildSensorChartDisplayState(history) {
+  // 将图例、坐标轴、点和线段合成一次 patch，减少 setData 成本。
   const normalizedHistory = normalizeSensorHistory(history);
   const latest = normalizedHistory[normalizedHistory.length - 1] || {};
   const emptyAxisCount = Math.max(SENSOR_HISTORY_LIMIT - normalizedHistory.length, 0);
@@ -338,6 +425,7 @@ function buildSensorChartDisplayState(history) {
       label: series.label,
       valueText: `${formatSensorChartNumber(latest[series.key])}${series.unit}`
     })),
+    sensorChartSeries: buildSensorChartSeries(normalizedHistory),
     sensorChartAxisLabels: emptyAxisLabels.concat(
       normalizedHistory.map((item, index) => ({
         id: `sensor-chart-axis-${item.timestamp}-${index}`,
@@ -371,66 +459,6 @@ function appendSensorHistory(history, sensorState) {
 
 function buildNextSensorHistoryPatch(history, sensorState) {
   return buildSensorHistoryState(appendSensorHistory(history, sensorState));
-}
-
-function getCanvasPixelRatio() {
-  try {
-    const info = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
-    return Number(info && info.pixelRatio) || 1;
-  } catch (error) {
-    return 1;
-  }
-}
-
-function setCanvasStrokeStyle(ctx, color) {
-  if (typeof ctx.setStrokeStyle === 'function') {
-    ctx.setStrokeStyle(color);
-    return;
-  }
-
-  ctx.strokeStyle = color;
-}
-
-function setCanvasFillStyle(ctx, color) {
-  if (typeof ctx.setFillStyle === 'function') {
-    ctx.setFillStyle(color);
-    return;
-  }
-
-  ctx.fillStyle = color;
-}
-
-function setCanvasLineWidth(ctx, width) {
-  if (typeof ctx.setLineWidth === 'function') {
-    ctx.setLineWidth(width);
-    return;
-  }
-
-  ctx.lineWidth = width;
-}
-
-function setCanvasLineCap(ctx, lineCap) {
-  if (typeof ctx.setLineCap === 'function') {
-    ctx.setLineCap(lineCap);
-    return;
-  }
-
-  ctx.lineCap = lineCap;
-}
-
-function setCanvasLineJoin(ctx, lineJoin) {
-  if (typeof ctx.setLineJoin === 'function') {
-    ctx.setLineJoin(lineJoin);
-    return;
-  }
-
-  ctx.lineJoin = lineJoin;
-}
-
-function flushCanvasDraw(ctx) {
-  if (typeof ctx.draw === 'function') {
-    ctx.draw();
-  }
 }
 
 function buildToastStyle(toast) {
@@ -614,6 +642,7 @@ Page({
   ),
 
   onLoad() {
+    // 建立网络连接前，先恢复持久化的界面和传感器状态。
     this.pageDestroyed = false;
     this.aliyunConfig = resolveAliyunConfig();
     const sensorState = loadSensorState();
@@ -643,6 +672,7 @@ Page({
   },
 
   onReady() {
+    // 数据就绪后初始化稳定的数字宽度；折线图由数据驱动，不需要 canvas 初始化。
     const sensorTrackPatch = SENSOR_FIELDS.reduce((patch, field) => {
       const trackStyleField = getSensorFieldName(field, 'trackStyle');
       const currentText = formatSensorDisplay(this.data[getSensorFieldName(field, 'display')]);
@@ -654,19 +684,10 @@ Page({
     }, {});
 
     this.setData(sensorTrackPatch);
-    this.sensorChartReady = true;
-    this.scheduleSensorChartDraw(this.pendingSensorChartDraw || {
-      animate: false
-    }, 60);
-    this.pendingSensorChartDraw = null;
   },
 
   onShow() {
     this.connectBackendSocket();
-    this.sensorChartCanvasState = null;
-    this.scheduleSensorChartDraw({
-      animate: false
-    }, 120);
     const now = Date.now();
     if (this.lastBackendSyncAt && now - this.lastBackendSyncAt < 3000) {
       return;
@@ -676,7 +697,6 @@ Page({
   },
 
   onHide() {
-    this.resetSensorChartRuntime();
     this.disconnectBackendSocket();
   },
 
@@ -707,21 +727,13 @@ Page({
         clearTimeout(this.sensorAnimationTimers[key]);
       });
     }
-    if (this.sensorChartAnimationTimer) {
-      clearTimeout(this.sensorChartAnimationTimer);
-      this.sensorChartAnimationTimer = null;
-    }
-    if (this.sensorChartDrawTimer) {
-      clearTimeout(this.sensorChartDrawTimer);
-      this.sensorChartDrawTimer = null;
-    }
-    this.sensorChartCanvasState = null;
     if (this.mqttClient) {
       this.mqttClient.disconnect();
     }
   },
 
   requestBackend(options) {
+    // 统一处理后端地址、鉴权头和响应错误，供所有待办请求复用。
     const path = String((options && options.path) || '').trim();
     const baseUrl = normalizeBackendBaseUrl(BACKEND_BASE_URL);
 
@@ -745,6 +757,7 @@ Page({
   },
 
   applyTodoList(todos, extraPatch) {
+    // 统一整理待办快照，让接口拉取和 socket 推送共用同一套渲染路径。
     const nextTodos = sortTodos(decorateTodos(todos));
     const patch = Object.assign(
       {
@@ -764,6 +777,7 @@ Page({
   },
 
   upsertTodo(todo, extraState, extraPatch) {
+    // 在本地插入或替换一条待办，并保持当前排序规则。
     const nextItem = Object.assign({}, decorateTodos([todo])[0], extraState || {});
     const nextTodos = sortTodos([nextItem].concat(this.data.todos.filter((item) => item.id !== nextItem.id)));
 
@@ -818,6 +832,7 @@ Page({
   },
 
   initBackendSocket() {
+    // 显式维护 websocket 状态，避免重连和关闭流程互相抢状态。
     this.backendSocketUrl = BACKEND_CONFIG.socketUrl;
     this.backendSocketTask = null;
     this.backendSocketClosing = false;
@@ -825,6 +840,7 @@ Page({
   },
 
   connectBackendSocket() {
+    // 监听后端推送的待办全量快照和增量更新。
     if (this.pageDestroyed || !this.backendSocketUrl || this.backendSocketTask) {
       return;
     }
@@ -898,6 +914,7 @@ Page({
   },
 
   handleBackendSocketMessage(message) {
+    // 使用和手动同步相同的列表工具处理后端推送消息。
     let parsed = null;
 
     try {
@@ -939,344 +956,11 @@ Page({
     }
   },
 
-  resolveSensorChartCanvas() {
-    if (
-      this.sensorChartCanvasState &&
-      this.data.activeTab === 'monitor' &&
-      this.sensorChartCanvasState.ctx &&
-      this.sensorChartCanvasState.width &&
-      this.sensorChartCanvasState.height
-    ) {
-      return Promise.resolve(this.sensorChartCanvasState);
-    }
-
-    return new Promise((resolve) => {
-      wx.nextTick(() => {
-        let query = wx.createSelectorQuery();
-        if (typeof query.in === 'function') {
-          query = query.in(this);
-        }
-        query.select('#sensorTrendCanvas').fields({
-          node: true,
-          size: true
-        });
-        query.select('#sensorTrendPlot').boundingClientRect();
-        query.exec((results) => {
-          const canvasInfo = results && results[0];
-          const plotRect = results && results[1];
-          const width = Number((canvasInfo && canvasInfo.width) || (plotRect && plotRect.width) || 0);
-          const height = Number((canvasInfo && canvasInfo.height) || (plotRect && plotRect.height) || 0);
-
-          if (canvasInfo && canvasInfo.node && typeof canvasInfo.node.getContext === 'function' && width && height) {
-            const dpr = getCanvasPixelRatio();
-            const canvas = canvasInfo.node;
-            canvas.width = Math.max(Math.round(width * dpr), 1);
-            canvas.height = Math.max(Math.round(height * dpr), 1);
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.scale(dpr, dpr);
-              const canvasState = {
-                ctx,
-                width,
-                height
-              };
-              this.sensorChartCanvasState = canvasState;
-              resolve(canvasState);
-              return;
-            }
-          }
-
-          const canvasState = {
-            ctx: wx.createCanvasContext('sensorTrendCanvas', this),
-            width,
-            height
-          };
-          if (width && height && canvasState.ctx) {
-            this.sensorChartCanvasState = canvasState;
-          }
-          resolve(canvasState);
-        });
-      });
-    });
-  },
-
-  getSensorChartColors() {
-    if (this.data.theme === 'dark') {
-      return {
-        grid: 'rgba(159, 176, 194, 0.18)',
-        temperature: 'rgba(255, 126, 170, 0.92)',
-        humidity: 'rgba(73, 219, 255, 0.92)',
-        pointFill: 'rgba(19, 24, 32, 0.96)'
-      };
-    }
-
-    return {
-      grid: 'rgba(115, 129, 147, 0.16)',
-      temperature: 'rgba(255, 112, 126, 0.92)',
-      humidity: 'rgba(76, 169, 229, 0.92)',
-      pointFill: 'rgba(247, 250, 255, 0.96)'
-    };
-  },
-
-  buildSensorCanvasSeriesPoints(history, seriesKey, rect) {
-    const normalizedHistory = normalizeSensorHistory(history);
-    const values = normalizedHistory
-      .map((item) => normalizeSensorNumber(item && item[seriesKey]))
-      .filter((value) => value !== null);
-
-    if (!values.length || !rect.width || !rect.height) {
-      return [];
-    }
-
-    const minValue = Math.min.apply(null, values);
-    const maxValue = Math.max.apply(null, values);
-    const valueRange = maxValue - minValue || 1;
-    const paddedMin = minValue - valueRange * 0.12;
-    const paddedMax = maxValue + valueRange * 0.12;
-    const paddedRange = paddedMax - paddedMin || 1;
-    const paddingX = 14;
-    const paddingTop = 10;
-    const paddingBottom = 14;
-    const usableWidth = Math.max(rect.width - paddingX * 2, 1);
-    const usableHeight = Math.max(rect.height - paddingTop - paddingBottom, 1);
-    const itemCount = Math.max(normalizedHistory.length, 1);
-    const slotCount = SENSOR_HISTORY_LIMIT;
-    const slotOffset = Math.max(slotCount - itemCount, 0);
-
-    return normalizedHistory
-      .map((item, index) => {
-        const value = normalizeSensorNumber(item && item[seriesKey]);
-
-        if (value === null) {
-          return null;
-        }
-
-        const slotIndex = slotOffset + index;
-        const x = paddingX + (usableWidth * slotIndex) / (slotCount - 1);
-        const y = paddingTop + (1 - (value - paddedMin) / paddedRange) * usableHeight;
-
-        return {
-          x,
-          y,
-          latest: index === normalizedHistory.length - 1
-        };
-      })
-      .filter(Boolean);
-  },
-
-  buildSensorChartPointMap(history, rect) {
-    return SENSOR_CHART_SERIES.reduce((pointMap, series) => {
-      pointMap[series.key] = this.buildSensorCanvasSeriesPoints(history, series.key, rect);
-      return pointMap;
-    }, {});
-  },
-
-  interpolateSensorChartPoints(fromPoints, toPoints, progress) {
-    return (toPoints || []).map((point, index) => {
-      const fromPoint = (fromPoints || [])[index] || point;
-
-      return {
-        x: fromPoint.x + (point.x - fromPoint.x) * progress,
-        y: fromPoint.y + (point.y - fromPoint.y) * progress,
-        latest: point.latest
-      };
-    });
-  },
-
-  drawSmoothSensorLine(ctx, points, color, pointFill) {
-    if (!points.length) {
-      return;
-    }
-
-    setCanvasStrokeStyle(ctx, color);
-    setCanvasLineWidth(ctx, 2.2);
-    setCanvasLineCap(ctx, 'round');
-    setCanvasLineJoin(ctx, 'round');
-
-    if (points.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      for (let index = 0; index < points.length - 1; index += 1) {
-        const current = points[index];
-        const next = points[index + 1];
-        const controlX = (current.x + next.x) / 2;
-        ctx.bezierCurveTo(controlX, current.y, controlX, next.y, next.x, next.y);
-      }
-      ctx.stroke();
-    } else {
-      const point = points[0];
-      ctx.beginPath();
-      ctx.moveTo(Math.max(point.x - 18, 0), point.y);
-      ctx.lineTo(point.x + 18, point.y);
-      ctx.stroke();
-    }
-
-    points.forEach((point) => {
-      const radius = point.latest ? 3.8 : 3;
-      ctx.beginPath();
-      setCanvasFillStyle(ctx, pointFill);
-      ctx.arc(point.x, point.y, radius + 1.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      setCanvasFillStyle(ctx, color);
-      ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  },
-
-  drawSensorChartFrame(ctx, rect, fromPointMap, toPointMap, progress) {
-    const colors = this.getSensorChartColors();
-    const width = rect.width;
-    const height = rect.height;
-    const paddingX = 14;
-    const paddingTop = 10;
-    const paddingBottom = 14;
-    const gridTop = paddingTop;
-    const gridMiddle = paddingTop + (height - paddingTop - paddingBottom) / 2;
-    const gridBottom = height - paddingBottom;
-
-    ctx.clearRect(0, 0, width, height);
-    setCanvasStrokeStyle(ctx, colors.grid);
-    setCanvasLineWidth(ctx, 1);
-    [gridTop, gridMiddle, gridBottom].forEach((gridY) => {
-      ctx.beginPath();
-      ctx.moveTo(paddingX, gridY);
-      ctx.lineTo(width - paddingX, gridY);
-      ctx.stroke();
-    });
-
-    SENSOR_CHART_SERIES.forEach((series) => {
-      const fromPoints = (fromPointMap && fromPointMap[series.key]) || [];
-      const toPoints = (toPointMap && toPointMap[series.key]) || [];
-      const points = this.interpolateSensorChartPoints(fromPoints, toPoints, progress);
-      this.drawSmoothSensorLine(ctx, points, colors[series.key], colors.pointFill);
-    });
-
-    flushCanvasDraw(ctx);
-  },
-
-  scheduleSensorChartDraw(options = {}, delay = 0) {
-    if (this.pageDestroyed) {
-      return;
-    }
-
-    const nextOptions = Object.assign({}, options);
-    if (this.sensorChartDrawTimer) {
-      clearTimeout(this.sensorChartDrawTimer);
-      this.sensorChartDrawTimer = null;
-    }
-
-    if (!delay) {
-      this.drawSensorChart(nextOptions);
-      return;
-    }
-
-    this.sensorChartDrawTimer = setTimeout(() => {
-      this.sensorChartDrawTimer = null;
-      this.drawSensorChart(nextOptions);
-    }, delay);
-  },
-
-  resetSensorChartRuntime() {
-    if (this.sensorChartAnimationTimer) {
-      clearTimeout(this.sensorChartAnimationTimer);
-      this.sensorChartAnimationTimer = null;
-    }
-    if (this.sensorChartDrawTimer) {
-      clearTimeout(this.sensorChartDrawTimer);
-      this.sensorChartDrawTimer = null;
-    }
-    this.sensorChartAnimationToken = (this.sensorChartAnimationToken || 0) + 1;
-    this.sensorChartCanvasState = null;
-  },
-
-  drawSensorChart(options = {}) {
-    if (this.pageDestroyed) {
-      return;
-    }
-
-    if (!this.sensorChartReady || this.data.activeTab !== 'monitor') {
-      this.pendingSensorChartDraw = options;
-      return;
-    }
-
-    if (this.sensorChartAnimationTimer) {
-      clearTimeout(this.sensorChartAnimationTimer);
-      this.sensorChartAnimationTimer = null;
-    }
-
-    const toHistory = normalizeSensorHistory(options.history || this.data.sensorHistory);
-    const fromHistory = normalizeSensorHistory(options.fromHistory || toHistory);
-    const shouldAnimate = Boolean(options.animate && fromHistory.length && toHistory.length);
-    const retryCount = Number(options.retryCount || 0);
-    const token = (this.sensorChartAnimationToken || 0) + 1;
-    this.sensorChartAnimationToken = token;
-
-    this.resolveSensorChartCanvas().then((canvasState) => {
-      if (this.pageDestroyed || this.sensorChartAnimationToken !== token) {
-        return;
-      }
-      if (this.data.activeTab !== 'monitor') {
-        return;
-      }
-
-      if (!canvasState.width || !canvasState.height || !canvasState.ctx) {
-        if (retryCount < SENSOR_CHART_MAX_RETRY) {
-          this.scheduleSensorChartDraw(
-            Object.assign({}, options, {
-              animate: false,
-              retryCount: retryCount + 1
-            }),
-            SENSOR_CHART_RETRY_DELAY_MS
-          );
-        }
-        return;
-      }
-
-      const ctx = canvasState.ctx;
-      const rect = {
-        width: canvasState.width,
-        height: canvasState.height
-      };
-      const fromPointMap = this.buildSensorChartPointMap(fromHistory, rect);
-      const toPointMap = this.buildSensorChartPointMap(toHistory, rect);
-
-      if (!shouldAnimate) {
-        this.drawSensorChartFrame(ctx, rect, toPointMap, toPointMap, 1);
-        return;
-      }
-
-      const startTime = Date.now();
-      const drawFrame = () => {
-        if (this.pageDestroyed || this.sensorChartAnimationToken !== token) {
-          return;
-        }
-        if (this.data.activeTab !== 'monitor') {
-          return;
-        }
-
-        const elapsed = Date.now() - startTime;
-        const rawProgress = Math.min(elapsed / SENSOR_CHART_ANIMATION_MS, 1);
-        const progress = 1 - Math.pow(1 - rawProgress, 3);
-        this.drawSensorChartFrame(ctx, rect, fromPointMap, toPointMap, progress);
-
-        if (rawProgress < 1) {
-          this.sensorChartAnimationTimer = setTimeout(drawFrame, 16);
-        } else {
-          this.sensorChartAnimationTimer = null;
-        }
-      };
-
-      drawFrame();
-    });
-  },
-
   animateSensorValue(field, nextValue) {
+    // 准备数字滚动帧，并在数值变化时保持数字宽度稳定。
     const valueField = field;
     const displayField = getSensorFieldName(field, 'display');
     const framesField = getSensorFieldName(field, 'frames');
-    const measureCurrentFramesField = getSensorFieldName(field, 'measureCurrent');
-    const measureNextFramesField = getSensorFieldName(field, 'measureNext');
     const trackStyleField = getSensorFieldName(field, 'trackStyle');
     const animatingField = getSensorFieldName(field, 'animating');
     const currentValue = this.data[valueField];
@@ -1293,8 +977,6 @@ Page({
       return {
         [displayField]: nextText,
         [framesField]: buildSensorDigitFrames(nextText, nextText),
-        [measureCurrentFramesField]: buildSensorMeasureFrames(nextText),
-        [measureNextFramesField]: buildSensorMeasureFrames(nextText),
         [trackStyleField]: buildSensorTrackWidthStyleByEm(stableWidthEm),
         [animatingField]: false
       };
@@ -1307,8 +989,6 @@ Page({
     const patch = {
       [displayField]: nextText,
       [framesField]: buildSensorDigitFrames(currentText, nextText, stableLength),
-      [measureCurrentFramesField]: buildSensorMeasureFrames(currentText),
-      [measureNextFramesField]: buildSensorMeasureFrames(nextText),
       [trackStyleField]: buildSensorTrackWidthStyleByEm(stableWidthEm),
       [animatingField]: true
     };
@@ -1330,8 +1010,6 @@ Page({
       this.setData({
         [animatingField]: false,
         [framesField]: buildSensorDigitFrames(nextText, nextText),
-        [measureCurrentFramesField]: buildSensorMeasureFrames(nextText),
-        [measureNextFramesField]: buildSensorMeasureFrames(nextText),
         [trackStyleField]: buildSensorTrackWidthStyleByEm(stableWidthEm)
       });
       this.sensorAnimationTimers[field] = null;
@@ -1341,6 +1019,7 @@ Page({
   },
 
   showToast(options) {
+    // 管理少量 toast，并维护进入、位移、离开状态以保证反馈顺滑。
     const config = typeof options === 'string' ? { title: options } : options || {};
     const duration = config.duration || 1800;
     const existingToasts = (this.data.toasts || []).filter((item) => !item.leaving);
@@ -1433,6 +1112,7 @@ Page({
   },
 
   appendLog(title, content) {
+    // 限制日志数量，避免长时间运行后 setData 数据量持续增大。
     this.setData({
       logs: mergeLogEntries(this.data.logs, [createLogEntry(title, content)])
     });
@@ -1476,6 +1156,7 @@ Page({
   },
 
   toggleTheme() {
+    // 主题切换只更新视觉状态，折线图颜色由 CSS 控制。
     const nextTheme = this.data.theme === 'light' ? 'dark' : 'light';
     if (this.themeAnimationTimer) {
       clearTimeout(this.themeAnimationTimer);
@@ -1483,10 +1164,6 @@ Page({
     this.setData({
       theme: nextTheme,
       themeAnimating: true
-    }, () => {
-      this.scheduleSensorChartDraw({
-        animate: false
-      }, 60);
     });
     this.saveTheme(nextTheme);
     this.themeAnimationTimer = setTimeout(() => {
@@ -1498,6 +1175,7 @@ Page({
   },
 
   initMqttClient() {
+    // MQTT 是云端传感器数据来源；有效载荷会同步更新数值、历史、图表和日志。
     this.mqttClient = new MiniProgramMqttClient(this.aliyunConfig);
 
     this.mqttClient.on('connect', () => {
@@ -1550,15 +1228,7 @@ Page({
       }
 
       if (Object.keys(patch).length) {
-        this.setData(patch, () => {
-          if (nextSensorHistory) {
-            this.scheduleSensorChartDraw({
-              animate: true,
-              fromHistory: previousSensorHistory,
-              history: nextSensorHistory
-            }, 40);
-          }
-        });
+        this.setData(patch);
       }
     });
 
@@ -1594,31 +1264,12 @@ Page({
     });
   },
 
-  syncTabbarIndicator(tab) {
-    const safeProgress = tab === 'todo' ? 1 : 0;
-
-    this.setData({
-      tabbarIndicatorStyle: `--tabbar-translate: ${safeProgress * 100}%;`
-    });
-  },
-
   setActiveTab(tab) {
-    const previousTab = this.data.activeTab;
-    const leavingMonitor = previousTab === 'monitor' && tab !== 'monitor';
-    const enteringMonitor = previousTab !== 'monitor' && tab === 'monitor';
-    if (leavingMonitor || enteringMonitor) {
-      this.resetSensorChartRuntime();
-    }
+    // 用一次状态更新完成切页，保证 tabbar 指示器和页面显隐同步。
     const safeProgress = tab === 'todo' ? 1 : 0;
     this.setData({
       activeTab: tab,
       tabbarIndicatorStyle: `--tabbar-translate: ${safeProgress * 100}%;`
-    }, () => {
-      if (tab === 'monitor') {
-        this.scheduleSensorChartDraw({
-          animate: false
-        }, enteringMonitor ? 180 : 100);
-      }
     });
   },
 
@@ -1648,6 +1299,7 @@ Page({
   },
 
   forceRefreshCloudData() {
+    // 将当前读数再次写入历史，便于手动刷新或测试折线图。
     const sensorState = {
       temperature: Number(this.data.temperature),
       humidity: Number(this.data.humidity)
@@ -1660,13 +1312,7 @@ Page({
 
     saveSensorState(sensorState);
     saveSensorHistory(historyPatch.sensorHistory);
-    this.setData(historyPatch, () => {
-      this.scheduleSensorChartDraw({
-        animate: true,
-        fromHistory: previousSensorHistory,
-        history: historyPatch.sensorHistory
-      }, 40);
-    });
+    this.setData(historyPatch);
     this.showToast({
       title: '界面已刷新',
       icon: 'success'
@@ -1686,6 +1332,7 @@ Page({
   },
 
   addTodo() {
+    // 通过后端创建待办，再用后端返回的标准数据更新本地列表。
     const title = (this.data.todoInput || '').trim();
     if (!title) {
       this.showToast({
@@ -1742,6 +1389,7 @@ Page({
   },
 
   updateTodo() {
+    // 先保存标题修改，成功后再清空行内编辑状态。
     const title = (this.data.editingInput || '').trim();
     const { editingId } = this.data;
 
@@ -1805,6 +1453,7 @@ Page({
   },
 
   toggleTodo(event) {
+    // 先乐观切换完成状态，再用后端响应进行校准。
     const { id } = event.currentTarget.dataset;
     const targetIndex = findTodoIndexById(this.data.todos, id);
     const target = targetIndex >= 0 ? this.data.todos[targetIndex] : null;
@@ -1854,6 +1503,7 @@ Page({
   },
 
   deleteTodo(event) {
+    // 先标记删除中，让删除动画完成后再移除列表项。
     const { id } = event.currentTarget.dataset;
     const targetIndex = findTodoIndexById(this.data.todos, id);
     const target = targetIndex >= 0 ? this.data.todos[targetIndex] : null;
@@ -1921,6 +1571,7 @@ Page({
   },
 
   reconnectMqtt() {
+    // 用户点击重连时，先断开再重新建立 MQTT 连接。
     if (!this.mqttClient) {
       return;
     }
@@ -1937,6 +1588,7 @@ Page({
   },
 
   submitTodosToAliyun() {
+    // 手动同步后端时记录日志，便于追踪与云端相关的操作。
     this.loadTodosFromBackend({ showToast: true, silent: true })
       .then((todos) => {
         const message = `小程序已同步后端 ${todos.length} 条待办\n${normalizeBackendBaseUrl(BACKEND_BASE_URL)}`;

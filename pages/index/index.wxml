@@ -11,7 +11,7 @@
     <view class="app-nav-title" style="{{navTitleStyle}}">智能桌面盒子</view>
   </view>
 
-  <view wx:if="{{activeTab === 'monitor'}}" class="content-page tab-page page-enter" style="position: relative; left: 0rpx; top: 210rpx">
+  <view hidden="{{activeTab !== 'monitor'}}" class="content-page tab-page page-enter" style="position: relative; left: 0rpx; top: 210rpx">
       <view class="top-card panel glass-card floating-card section-enter">
         <view class="panel-head">
           <view class="section-kicker with-icon panel-head-leading">
@@ -57,18 +57,6 @@
                 <image class="metric-label-icon" src="/assets/icons/temperature.svg" mode="aspectFit" />
                 <view class="metric-label">云端温度</view>
               </view>
-              <view class="sensor-measure-layer" aria-hidden="true">
-                <view id="temperatureMeasureCurrentTrack" class="sensor-number-track sensor-number-measure">
-                  <view wx:for="{{temperatureMeasureCurrentFrames}}" wx:key="id" class="{{item.slotClass}}">
-                    <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
-                  </view>
-                </view>
-                <view id="temperatureMeasureNextTrack" class="sensor-number-track sensor-number-measure">
-                  <view wx:for="{{temperatureMeasureNextFrames}}" wx:key="id" class="{{item.slotClass}}">
-                    <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
-                  </view>
-                </view>
-              </view>
               <view class="sensor-value {{temperatureAnimating ? 'is-animating' : ''}}">
                 <view class="sensor-number-track" style="{{temperatureNumberTrackStyle}}">
                   <view wx:for="{{temperatureDigitFrames}}" wx:key="id" class="{{item.slotClass}}">
@@ -90,18 +78,6 @@
               <view class="metric-label-row">
                 <image class="metric-label-icon" src="/assets/icons/humidity.svg" mode="aspectFit" />
                 <view class="metric-label">云端湿度</view>
-              </view>
-              <view class="sensor-measure-layer" aria-hidden="true">
-                <view id="humidityMeasureCurrentTrack" class="sensor-number-track sensor-number-measure">
-                  <view wx:for="{{humidityMeasureCurrentFrames}}" wx:key="id" class="{{item.slotClass}}">
-                    <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
-                  </view>
-                </view>
-                <view id="humidityMeasureNextTrack" class="sensor-number-track sensor-number-measure">
-                  <view wx:for="{{humidityMeasureNextFrames}}" wx:key="id" class="{{item.slotClass}}">
-                    <text class="sensor-digit-char static {{item.nextClass}}">{{item.nextChar}}</text>
-                  </view>
-                </view>
               </view>
               <view class="sensor-value {{humidityAnimating ? 'is-animating' : ''}}">
                 <view class="sensor-number-track" style="{{humidityNumberTrackStyle}}">
@@ -130,8 +106,14 @@
                 </view>
               </view>
             </view>
-            <view id="sensorTrendPlot" class="sensor-chart-plot">
-              <canvas id="sensorTrendCanvas" canvas-id="sensorTrendCanvas" type="2d" class="sensor-chart-canvas" style="width: 100%; height: 150rpx;" disable-scroll="true"></canvas>
+            <view class="sensor-chart-plot">
+              <view class="sensor-chart-grid-line top"></view>
+              <view class="sensor-chart-grid-line middle"></view>
+              <view class="sensor-chart-grid-line bottom"></view>
+              <view wx:for="{{sensorChartSeries}}" wx:key="key" wx:for-item="series" class="sensor-chart-series {{series.key}}">
+                <view wx:for="{{series.segments}}" wx:key="id" wx:for-item="segment" class="sensor-chart-segment" style="{{segment.style}}"></view>
+                <view wx:for="{{series.points}}" wx:key="id" wx:for-item="point" class="sensor-chart-point {{point.latest ? 'latest' : ''}}" style="{{point.style}}"></view>
+              </view>
             </view>
             <view class="sensor-chart-axis">
               <view wx:for="{{sensorChartAxisLabels}}" wx:key="id" class="sensor-chart-axis-label">{{item.label}}</view>
