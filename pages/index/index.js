@@ -299,9 +299,12 @@ function buildSensorChartPoints(history, seriesKey) {
       const slotIndex = slotOffset + index;
       const x = SENSOR_CHART_X_START + (xRange * slotIndex) / (SENSOR_HISTORY_LIMIT - 1);
       const y = SENSOR_CHART_Y_TOP + (1 - (value - paddedMin) / paddedRange) * yRange;
+      const sampleKey = item.id || item.timestamp || slotIndex;
 
       return {
-        id: `sensor-chart-${seriesKey}-point-${item.timestamp}-${index}`,
+        // 点位 key 绑定采样身份，保留旧节点向新坐标移动的过渡动画。
+        id: `sensor-chart-${seriesKey}-point-${sampleKey}`,
+        sampleKey,
         x,
         y,
         latest: index === normalizedHistory.length - 1,
@@ -311,8 +314,17 @@ function buildSensorChartPoints(history, seriesKey) {
     .filter(Boolean);
 }
 
+function buildSensorChartSegmentStyle(point, nextPoint) {
+  const dx = nextPoint.x - point.x;
+  const dy = (nextPoint.y - point.y) / SENSOR_CHART_ASPECT_RATIO;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+  return `left: ${point.x.toFixed(3)}%; top: ${point.y.toFixed(3)}%; width: ${length.toFixed(3)}%; transform: rotate(${angle.toFixed(3)}deg);`;
+}
+
 function buildSensorChartSegments(points, seriesKey) {
-  // 用定位和旋转的 view 表示线段，避开 canvas 重绘时序问题。
+  // 用定位和旋转的 view 表示直折线，避开 canvas 重绘时序问题并保留 CSS 过渡。
   if (!points.length) {
     return [];
   }
@@ -321,7 +333,8 @@ function buildSensorChartSegments(points, seriesKey) {
     const point = points[0];
     return [
       {
-        id: `sensor-chart-${seriesKey}-segment-single-${point.id}`,
+        // 单点占位线绑定采样身份，避免刷新时无意义重建。
+        id: `sensor-chart-${seriesKey}-segment-single-${point.sampleKey}`,
         style: `left: ${Math.max(point.x - 4, SENSOR_CHART_X_START).toFixed(3)}%; top: ${point.y.toFixed(3)}%; width: 8%; transform: rotate(0deg);`
       }
     ];
@@ -329,14 +342,11 @@ function buildSensorChartSegments(points, seriesKey) {
 
   return points.slice(0, -1).map((point, index) => {
     const nextPoint = points[index + 1];
-    const dx = nextPoint.x - point.x;
-    const dy = (nextPoint.y - point.y) / SENSOR_CHART_ASPECT_RATIO;
-    const length = Math.sqrt(dx * dx + dy * dy);
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
 
     return {
-      id: `sensor-chart-${seriesKey}-segment-${point.id}-${nextPoint.id}`,
-      style: `left: ${point.x.toFixed(3)}%; top: ${point.y.toFixed(3)}%; width: ${length.toFixed(3)}%; transform: rotate(${angle.toFixed(3)}deg);`
+      // 线段 key 绑定相邻采样对，旧线段移动时只更新位置、长度和角度。
+      id: `sensor-chart-${seriesKey}-segment-${point.sampleKey}-${nextPoint.sampleKey}`,
+      style: buildSensorChartSegmentStyle(point, nextPoint)
     };
   });
 }

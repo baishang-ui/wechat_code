@@ -409,11 +409,13 @@
   height: 4rpx;
   border-radius: 999rpx;
   transform-origin: left center;
+  animation: sensorChartSegmentEnter 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transition:
-    left 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    top 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    width 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    left 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    top 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease;
 }
 
 .sensor-chart-point {
@@ -421,9 +423,13 @@
   height: 10rpx;
   border-radius: 50%;
   transform: translate3d(-50%, -50%, 0);
+  animation: sensorChartPointEnter 260ms ease-out both;
   transition:
-    left 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    top 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    left 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    top 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 220ms ease,
+    height 220ms ease,
+    opacity 220ms ease;
 }
 
 .sensor-chart-point.latest {
@@ -449,6 +455,27 @@
 .theme-dark .sensor-chart-series.humidity .sensor-chart-segment,
 .theme-dark .sensor-chart-series.humidity .sensor-chart-point {
   background: #49dbff;
+}
+
+@keyframes sensorChartSegmentEnter {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sensorChartPointEnter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .theme-light .sensor-chart-grid-line {
