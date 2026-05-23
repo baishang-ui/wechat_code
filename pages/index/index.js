@@ -3,7 +3,13 @@
 
 const { loadSensorState, saveSensorState, loadSensorHistory, saveSensorHistory } = require('../../utils/storage');
 const { resolveAliyunConfig } = require('../../utils/aliyunConfig');
-const { resolveBackendConfig, normalizeBackendBaseUrl } = require('../../utils/backendConfig');
+const {
+  cacheBackendBaseUrl,
+  normalizeBackendBaseUrl,
+  normalizeBackendSocketUrl,
+  resolveBackendBaseUrlCandidates,
+  resolveBackendConfig
+} = require('../../utils/backendConfig');
 const { MiniProgramMqttClient } = require('../../utils/mqttClient');
 
 const THEME_KEY = 'page-theme';
@@ -43,7 +49,6 @@ const SENSOR_FIELD_SUFFIXES = {
 };
 const MAX_TODO_COUNT = 5;
 const BACKEND_CONFIG = resolveBackendConfig();
-const BACKEND_BASE_URL = BACKEND_CONFIG.baseUrl;
 const BACKEND_API_TOKEN = BACKEND_CONFIG.apiToken;
 const BACKEND_SOCKET_RETRY_MS = BACKEND_CONFIG.socketRetryMs;
 
@@ -745,25 +750,73 @@ Page({
   requestBackend(options) {
     // 统一处理后端地址、鉴权头和响应错误，供所有待办请求复用。
     const path = String((options && options.path) || '').trim();
-    const baseUrl = normalizeBackendBaseUrl(BACKEND_BASE_URL);
+    const method = (options && options.method) || 'GET';
+    const data = options && options.data;
+    const header = buildBackendHeaders();
+    let lastError = null;
 
-    return requestPromise({
-      url: `${baseUrl}${path}`,
-      method: (options && options.method) || 'GET',
-      data: options && options.data,
-      timeout: 10000,
-      header: buildBackendHeaders()
-    }).then((response) => {
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return response.data;
+    const tryRequest = (candidates, index) => {
+      const baseUrl = normalizeBackendBaseUrl(candidates[index]);
+
+      if (!baseUrl) {
+        if (index + 1 < candidates.length) {
+          return tryRequest(candidates, index + 1);
+        }
+
+        throw lastError || new Error('未获取到当前网络后端地址');
       }
 
-      const data = response.data || {};
-      const error = new Error(data.message || `请求失败 (${response.statusCode})`);
-      error.statusCode = response.statusCode;
-      error.data = data;
-      throw error;
-    });
+      return requestPromise({
+        url: `${baseUrl}${path}`,
+        method,
+        data,
+        timeout: 10000,
+        header
+      })
+        .then((response) => {
+          this.updateBackendBaseUrl(baseUrl);
+
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            return response.data;
+          }
+
+          const responseData = response.data || {};
+          const error = new Error(responseData.message || `请求失败 (${response.statusCode})`);
+          error.statusCode = response.statusCode;
+          error.data = responseData;
+          error.backendReachable = true;
+          throw error;
+        })
+        .catch((error) => {
+          lastError = error;
+
+          if (!error.backendReachable && index + 1 < candidates.length) {
+            return tryRequest(candidates, index + 1);
+          }
+
+          throw error;
+        });
+    };
+
+    return resolveBackendBaseUrlCandidates(this.backendBaseUrl).then((candidates) => tryRequest(candidates, 0));
+  },
+
+  updateBackendBaseUrl(baseUrl) {
+    // 成功连接后记录当前网络地址，并同步刷新 WebSocket 连接地址。
+    const normalizedBaseUrl = normalizeBackendBaseUrl(baseUrl);
+    if (!normalizedBaseUrl || this.backendBaseUrl === normalizedBaseUrl) {
+      return;
+    }
+
+    const previousSocketUrl = this.backendSocketUrl;
+    this.backendBaseUrl = normalizedBaseUrl;
+    this.backendSocketUrl = normalizeBackendSocketUrl(normalizedBaseUrl);
+    cacheBackendBaseUrl(normalizedBaseUrl);
+
+    if (previousSocketUrl && previousSocketUrl !== this.backendSocketUrl && this.backendSocketTask) {
+      this.disconnectBackendSocket();
+      this.connectBackendSocket();
+    }
   },
 
   applyTodoList(todos, extraPatch) {
@@ -814,6 +867,7 @@ Page({
       .then((data) => {
         const nextTodos = this.applyTodoList((data && data.items) || []);
         this.lastBackendSyncAt = Date.now();
+        this.connectBackendSocket();
 
         if (config.showToast) {
           this.showToast({
@@ -843,6 +897,7 @@ Page({
 
   initBackendSocket() {
     // 显式维护 websocket 状态，避免重连和关闭流程互相抢状态。
+    this.backendBaseUrl = BACKEND_CONFIG.baseUrl;
     this.backendSocketUrl = BACKEND_CONFIG.socketUrl;
     this.backendSocketTask = null;
     this.backendSocketClosing = false;
@@ -851,7 +906,11 @@ Page({
 
   connectBackendSocket() {
     // 监听后端推送的待办全量快照和增量更新。
-    if (this.pageDestroyed || !this.backendSocketUrl || this.backendSocketTask) {
+    if (this.pageDestroyed || this.backendSocketTask) {
+      return;
+    }
+
+    if (!this.backendSocketUrl) {
       return;
     }
 
@@ -1601,7 +1660,7 @@ Page({
     // 手动同步后端时记录日志，便于追踪与云端相关的操作。
     this.loadTodosFromBackend({ showToast: true, silent: true })
       .then((todos) => {
-        const message = `小程序已同步后端 ${todos.length} 条待办\n${normalizeBackendBaseUrl(BACKEND_BASE_URL)}`;
+        const message = `小程序已同步后端 ${todos.length} 条待办\n${normalizeBackendBaseUrl(this.backendBaseUrl)}`;
         this.appendLog('手动同步后端', message);
       })
       .catch((error) => {

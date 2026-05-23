@@ -69,18 +69,12 @@ The mini program backend address is now centralized in:
 Default LAN setup:
 
 1. Start the local backend on port `3000`
-2. Keep the PC and phone on the same Wi-Fi
-3. Set `baseUrl` in `utils/backendConfig.js` to the PC LAN address
-4. Preview the mini program on the phone
-
-Example:
-
-```js
-baseUrl: 'http://10.232.28.55:3000'
-```
+2. Keep the development device and backend on the same network
+3. Leave `baseUrl` empty; the mini program will use the current network IP and cache the last successful address
 
 Notes:
 
 - If `baseUrl` is `http://...`, the mini program will automatically use `ws://.../ws/todos`
-- If you change Wi-Fi, the PC LAN IP may also change, so update `baseUrl` when needed
+- If Wi-Fi changes, the app will retry using the current network address instead of staying on the old IP
+- You can still set `baseUrl` manually in `utils/backendConfig.js` when a fixed server address is required
 - This mode is intended for same-LAN debugging and does not require mobile data access
